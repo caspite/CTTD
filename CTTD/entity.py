@@ -6,31 +6,28 @@ class Entity:
         Class that represents a basic entity in the simulation
     """
 
-    def __init__(self, _id, time_born=0.0, last_time_updated=0, location=[0.0, 0.0]):
+    def __init__(self, _id, last_time_updated=0, location=[0.0, 0.0]):
         """
         :param _id: the entity id
-        :param time_born: when the entity born
-        :param last_time_updated: the last time that the entity updated
+        :param last_time_updated: the last time that the entity updated (initial is time born)
         :param location:  the entity current location type: list of coordination
         """
 
         self._id = _id
-        self.time_born = time_born
-        self.last_time_updated = last_time_updated if self.time_born < last_time_updated else \
-            self.update_last_time(self.time_born)
+        self.last_time_updated = last_time_updated
         self.location = location
 
     def update_location(self, location):
         """
         :param location: the next entity location
-        :return: Nane
+        :return: None
         """
         self.location = location
 
     def update_last_time(self, tnow):
         """
         :param tnow: next time update
-        :return: Nane
+        :return: None
         """
         self.last_time_updated = tnow if tnow > self.last_time_updated else Exception\
             ("times bug! last time in higher then tnow!")
@@ -51,6 +48,8 @@ class Entity:
 
     def __eq__(self, other):
         return self._id == other._id
+
+
 
 
 def calc_distance(location1, location2):
