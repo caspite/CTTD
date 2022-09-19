@@ -1,9 +1,5 @@
 import enum
-import copy
-import abc
-
 from CTTD.entity import Entity
-from CTTD.problem_companents import *
 
 
 class Status(enum.Enum):
@@ -20,7 +16,7 @@ class ServiceProvider(Entity):
     A class that represent a service provider
     """
 
-    def __init__(self, _id, time_born, location, speed, skills=[], status =Status.IDLE,
+    def __init__(self, _id, time_born, location, speed, skills, status=Status.IDLE,
                  base_location=None, productivity=1):
         """
         :param _id: the entity id
@@ -35,7 +31,7 @@ class ServiceProvider(Entity):
         :rtype [skill]
         :param status: the service provider status in the simulation
         :rtype Status
-        :param base_location: if has one
+        :param base_location: The service provider base location case has one
         :rtype [float]
         :param productivity: entity productivity between 0 and 1
         :rtype float
@@ -46,24 +42,36 @@ class ServiceProvider(Entity):
         self.status = status
         self.skills = skills
         self.speed = speed
-        self. workload =dict.fromkeys(skills,0) # initiate the workload of each skill to 0
+        self.capacity = dict.fromkeys(skills, 0)  # initiate the capacity of each skill to 0
 
-    def update_workload_each_skill(self,skill, workload):
+    def update_workload_each_skill(self, skill, capacity):
         """
 
         :param skill: The skill
-        :param workload: The workload of the skill
+        :param capacity: The workload of the skill
         :rtype float
         :return: None
         """
-        self.workload[skill] = workload if skill in self.workload.keys() else False
+        self.capacity[skill] = capacity if skill in self.capacity.keys() else False
 
     def provide_service(self, skill, workload):
         """
         reduce the workload of a skill
         :param skill: the providable skill
-        :param workload: the workload should by reduce
+        :param workload: the workload should be reduced from current capacity
         :return: boolean if the workload is above the capacity
         """
-        self.workload[skill] -= workload if skill in self.workload.keys() and self.workload[skill] >= workload\
+        self.capacity[skill] -= workload if skill in self.capacity.keys() and self.capacity[skill] >= workload\
             else False
+
+    def __str__(self):
+        pass
+
+    def __eq__(self, other):
+        pass
+
+    def get_free_capacity(self):
+        pass
+
+    def reset_capacity(self):
+        pass

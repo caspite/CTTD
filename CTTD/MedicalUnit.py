@@ -1,4 +1,4 @@
-from CTTD.ServiceProvider import *
+from CTTD.ServiceEntities import *
 
 
 class MedicalUnit(ServiceProvider):
