@@ -187,6 +187,7 @@ class Service:
         self.minimum_time = minimum_time
         self.skill = skill
         self._id = _id
+        self.finished = False  # if the service completed
 
     def calc_utility(self, workload, start_time, number_service_providers):
         """
@@ -196,4 +197,4 @@ class Service:
         :return: the utility from working on the service by start time, workload, number of service
         providers
         """
-        pass
+        raise Exception("This method should be extended!")
