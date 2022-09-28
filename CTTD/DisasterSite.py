@@ -1,10 +1,15 @@
-class DisasterSite(Entity):
+import math
 
-    def __init__(self, id=0, location=[0,0], ):
-        self.location = location
-        self.id = id
+from abstract_service_orientd_simulation.ServiceEntities import ServiceRequester
+
+
+class DisasterSite(ServiceRequester):
+
+    def __init__(self, _id, location, time_born, skills, services, time_max, casualties=[]):
+        ServiceRequester.__init__(_id, time_born, location, skills, services, time_max)
+        self.casualties = casualties
 
     def add_casualties(self, casualties):
-        pass
+        self.casualties.append(casualties)
 
 

@@ -50,8 +50,6 @@ class Entity:
         return self._id == other._id
 
 
-
-
 def calc_distance(location1, location2):
     """
     :param location1: entity 1 location list of coordination
