@@ -32,7 +32,7 @@ class Entity:
         self.last_time_updated = tnow if tnow > self.last_time_updated else Exception\
             ("times bug! last time in higher then tnow!")
 
-    def distance_from_other_entity(self,other):
+    def distance_from_other_entity(self, other):
         """
         :param other: other entity
         :return: distance between self and other entity
@@ -61,4 +61,4 @@ def calc_distance(location1, location2):
 
 
 def calc_distance_between_tow_entities(entity1: Entity, entity2: Entity):
-    return calc_distance(entity1.location,entity2.location)
+    return calc_distance(entity1.location, entity2.location)

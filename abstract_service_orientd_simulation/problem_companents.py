@@ -47,9 +47,9 @@ class Skill:
         """
 
         :param skill_name:  The skill type name (if dkill name is none, name = skill id as str)
-        :type str
+        :rtype str
         :param skill_id: the skill id
-        :type int
+        :rtype int
         """
         self.skill_id = skill_id
         self.skill_name = skill_name if skill_name==None else self.skill_name = str(self.skill_id)

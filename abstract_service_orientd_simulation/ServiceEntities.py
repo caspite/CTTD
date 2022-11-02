@@ -3,6 +3,7 @@ import functools
 import math
 
 from abstract_service_orientd_simulation.entity import Entity
+from abstract_service_orientd_simulation.problem_companents import Skill
 
 
 class Status(enum.Enum):
@@ -45,7 +46,9 @@ class ServiceProvider(Entity):
         self.status = status
         self.skills = skills
         self.speed = speed
-        self.capacity = dict.fromkeys(skills, 0)  # initiate the capacity of each skill to 0
+        self.workload = dict.fromkeys(skills, 0)  # initiate the workload of each skill to 0
+        self.scheduled_services = [Service]
+        # the services that were scheduled list of Service object
 
     def update_workload_each_skill(self, skill, capacity):
         """
@@ -55,7 +58,7 @@ class ServiceProvider(Entity):
         :rtype float
         :return: None
         """
-        self.capacity[skill] = capacity if skill in self.capacity.keys() else False
+        self.workload[skill] = capacity if skill in self.workload.keys() else False
 
     def provide_service(self, skill, workload):
         """
@@ -64,20 +67,25 @@ class ServiceProvider(Entity):
         :param workload: the workload should be reduced from current capacity
         :return: boolean if the workload is above the capacity
         """
-        self.capacity[skill] -= workload if skill in self.capacity.keys() and self.capacity[skill] >= workload\
+        self.workload[skill] -= workload if skill in self.workload.keys() and self.workload[skill] >= workload\
             else False
 
     def __str__(self):
-        pass
+        return " Service Provider id: " + self._id + " last update time: " + self.last_time_updated + \
+               " current location: " + self.location + " free workload: " + self.workload
 
     def __eq__(self, other):
-        pass
+        self._id == other._id
 
-    def get_free_capacity(self):
-        pass
+    def get_free_workload(self, skill):
+        """
+        return the free workload for allocation by skill
+        :return: float
+        """
+        return self.workload[skill]
 
-    def reset_capacity(self):
-        pass
+    def reset_workload(self, skill, workload):
+        self.workload[skill] = workload
 
 
 class ServiceRequester(Entity):
@@ -85,7 +93,7 @@ class ServiceRequester(Entity):
         A class that represent a service provider
     """
 
-    def __init__(self, _id, time_born, location, skills, services, time_max=math.inf):
+    def __init__(self, _id, time_born, location, skills, max_time=math.inf):
         """
         :param _id: the entity id
         :rtype int
@@ -95,60 +103,55 @@ class ServiceRequester(Entity):
         :rtype [float]
         :param skills: list of require skills
         :rtype [skill]
-        :param time_max: the maximum time that the requirements need to complete (infinity if not initiate)
+        :param max_time: the maximum time fo each skill need to complete (infinity if not initiate)
         :rtype float
 
         """
         Entity.__init__(_id, time_born, location)
-        self.services = services  # the services needed to be completed. if all completed - finished
-        self.time_max = time_max
+        self.max_time = max_time
         self.skills = skills
-        self.requirements = dict.fromkeys(services, 0)  # initiate the requirements of each service to 0
-        self.finished = False  # when all the requirements completed true
-        self.cap = 1  # the benefit from working simultaneously on few services
-        self.scheduled_services = dict.fromkeys(services, [0, self.last_time_updated, 0])
-        # initiate the scheduled services of each skill to 0 workload and in the current time utility to 0
+        self.skills_requirements = dict.fromkeys(skills, [0, 0, 1, max_time])
+        # initiate the requirements of each skill. dict-> Skill: workload=0
+        self.skills_definitions = dict.fromkeys(skills, [0, 1, max_time])
+        # initiate the definitions of each skill. dict-> Skill: [max utility=0,cap=1,max time=max_time]
 
-    def reduce_service_requirement(self, service, workload):
+        self.finished = False  # when all the skill requirements completed true
+        self.cap = 1  # the benefit from working simultaneously on few services
+        self.scheduled_services = [Service]
+        # the services that were scheduled list of Service object
+
+    def reduce_skill_requirement(self, skill, workload):
         """
         Reduce the workload from a service by a skill
-        :param service: the reduced service id
-        :type int
+        :param skill: the reduced service id
+        :type Skill
         :param workload: the workload to reduce
         :return: None if success else exception
         """
-        self.requirements[service] -= workload if self.requirements[service] > workload else \
+        self.skills_requirements[skill] -= workload if self.requirements[skill] > workload else \
             Exception("The workload is higher than the requirements")
 
-    def add_schedule_service(self, service, workload, start_time, number_service_providers):
+    def add_scheduled_service(self, service):
         """
-        schedule a service skill workload and time
-        :param number_service_providers: the number of service providers working simultaneity
+        add a service to schedule services
         :param service: the service provide
-        :param workload: the amount of workload
-        :param start_time: the start time
-        :return:
         """
-        self.scheduled_services[service] += [workload, start_time, service.calc_utility(workload, start_time,
-                                                                                        number_service_providers)]  # add to scheduled services a service
+        self.scheduled_services.append(service)
 
     def initiate_scheduled_services(self):
         """
         initiate all the scheduled services
-        :return:
         """
-        for i in self.scheduled_services.keys():
-            self.scheduled_services[i] = [0, self.last_time_updated, 0]
+        self.scheduled_services.clear()
 
     def calc_utility_by_schedule(self):
         """
-        calc the utility from schedule
+        calc the utility from scheduled services - this is used in extend class
         :return: the utility from scheduled services
         """
-        # sum all utility from scheduled dict
-        return functools.reduce(lambda a, b: a+b, self.scheduled_services.values()[2])
+        raise Exception("This is an abstract method!")
 
-    def schedule_services_by_providable_skills_time_workload(self, skill, workload, start_time):
+    def allocate_requirements_by_providable_skills_time_workload(self, skill, workload, start_time):
         """
         get a providable skills, start time and workload and scheduled them
         :return: update the self schedule raise exception - this is used in extend class
@@ -164,37 +167,37 @@ class ServiceRequester(Entity):
 
 
 class Service:
-    def __init__(self, _id, skill, minimum_time, pre_service=None, workload=1, max_cap=1, max_utility=0):
-        """
+    """
+    a class that represent a service: composed of a skill and the workload to be provided in an SR
 
+    """
+    def __init__(self, _id, sr, skill, start_time, workload=1):
+        """
         :param _id: the service id = service_requester_id + order id
         :rtype int
+        :param sr: the service provider id
+        :rtype: int
         :param skill: skills needed to complete the service
         :rtype Skill
-        :param minimum_time: the minimal time to start the service
+        :param start_time: the time to start the service
         :rtype float
-        :param pre_service: the id of the pre-service - not necessary
-        :rtype int
-        :param workload: the number of units of each skill
-        :rtype {skill: float}
-        :param max_cap: the maximum number of service providers needed to complete the service
-        :param max_utility: the maximum utility can be derived from complete the service
+        :param workload: the amount of workload to be provided
+        :rtype float
+
         """
-        self.max_utility = max_utility
-        self.max_cap = max_cap
+
         self.workload = workload
-        self.pre_service = pre_service
-        self.minimum_time = minimum_time
+        self.start_time = start_time
         self.skill = skill
         self._id = _id
+        self.sr = sr
+        self.duration = self.calc_duration()
+        self.utility = self.calc_utility()
         self.finished = False  # if the service completed
 
-    def calc_utility(self, workload, start_time, number_service_providers):
+    def calc_utility(self):
         """
-        :param number_service_providers:
-        :param workload:
-        :param start_time:
         :return: the utility from working on the service by start time, workload, number of service
         providers
         """
-        raise Exception("This method should be extended!")
+        return self.skill.calc_utility(self.workload, self.start_time)

@@ -40,7 +40,7 @@ class MedicalUnit(ServiceProvider):
         self.max_capacity = self.unit_type.get_maximum_capacity()
         map(lambda s: self.update_workload_each_skill(s, self.unit_type.get_max_capacity_by_skill(s)), self.skills)
 
-    def load_casualty(self,casualty):
+    def load_casualty(self, casualty):
         """
         Add casualty to loaded casualties
         :param casualty:
@@ -48,7 +48,7 @@ class MedicalUnit(ServiceProvider):
         """
         self.uploaded_casualties.append(casualty)
 
-    def arrived_to_hospital(self, hospital: Entity): # todo - move this to a
+    def arrived_to_hospital(self, hospital: Entity):
         """
         when medical unit arrives to a hospital it initiates the loaded casualties and refill
         :return:
@@ -72,41 +72,66 @@ class MedicalUnitTypeName(enum):
 
 class MedicalUnitType:
     """
-    object that hold the medical unit type and the params that derived from the medical unit type
+    object that hold the medical unit type and the params that derived from the type
     """
 
-    def __init__(self, medical_unit_type_name):
+    def __init__(self, medical_unit_type_name, _id):
         """
-
         :param medical_unit_type_name:
         :rtype MedicalUnitTypeName
-        :param max_capacity
+        :param max_capacity the maximum workload for each skill
         :rtype int
-        :param skills
+        :param skills: 1 - treatment, 2 - uploaded, 3 - transportation 01 - urgent 02 - medium 03 - non urgent
         :type [skill]
         :param max_workload_for_skill
         :type dict{skill:float}
         """
         self.medical_unit_type_name = medical_unit_type_name
-        self.max_capacity = self.get_max_capacity()
+        self._id = _id
         self.skills = self.get_skills()
-        self.max_workload_for_skill = self.get_max_workload_for_all_skills () # dict of skill: number of workload
+        self.max_workload_for_skill = self.get_max_workload_for_all_skills()
+        # dict of skill: number of workload
         self.speed = self.get_speed()
 
-    def get_max_capacity(self):
-        pass
-
-    def get_skills(self):
-        pass
+    def get_skills(self, skills):
+        """
+        :param skills:  list of all the skills in the problem
+        :return: list of skills relevant for this medical unit type
+        """
+        match self.medical_unit_type_name:  # todo - check consistency with the problem
+            case 'BLS':
+                return [12, 22, 32, 13, 23, 33]
+            case 'ALS':
+                return [11, 21, 31, 12, 22, 32, 13, 23, 33]
+            case 'motorcycle':
+                return [11, 12, 13]
+            case _:
+                raise Exception('Medical unit type name not valid')
 
     def get_max_workload_for_all_skills(self):
-        pass
+        """
+        :return: dict - maximum workload for each skill type
+        """
+        match self.medical_unit_type_name:  # todo - check consistency with the problem
+            case 'BLS':
+                return {12: 2, 22: 2, 32: 2, 13: 3, 23: 3, 33: 3}
+            case 'ALS':
+                return {11: 2, 21: 2, 31: 2, 12: 4, 22: 4, 32: 4, 13: 6, 23: 6, 33: 6}
+            case 'motorcycle':
+                return {11: 1, 12: 2, 13: 2}
+            case _:
+                raise Exception('Medical unit type name not valid')
 
     def get_speed(self):
-        pass
-
-    def get_maximum_capacity(self):
-        pass
+        match self.medical_unit_type_name:
+            case 'BLS':
+                return 60
+            case 'ALS':
+                return 60
+            case 'motorcycle':
+                return 80
+            case _:
+                raise Exception('Medical unit type name not valid')
 
 
 
