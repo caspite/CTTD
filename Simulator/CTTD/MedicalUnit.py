@@ -1,4 +1,4 @@
-from abstract_service_orientd_simulation.ServiceEntities import *
+from Simulator.SimulationComponents import *
 import enum
 
 

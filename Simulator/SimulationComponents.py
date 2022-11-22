@@ -1,11 +1,69 @@
 import enum
-import functools
+import random
 import math
 
-from abstract_service_orientd_simulation.entity import Entity
-from abstract_service_orientd_simulation.problem_companents import Skill
+
+# represents all the simulation base abstract components
+
+_width = None
+_length = None
 
 
+# basic entity has id , update time and location
+class Entity:
+    """
+        Class that represents a basic entity in the simulation
+    """
+
+    def __init__(self, _id, last_time_updated=0, location=[0.0, 0.0]):
+        """
+        :param _id: the entity id
+        :param last_time_updated: the last time that the entity updated (initial is time born)
+        :param location:  the entity current location type: list of coordination
+        """
+
+        self._id = _id
+        self.last_time_updated = last_time_updated
+        self.location = location
+        self.neighbors = []
+
+    def update_location(self, location):
+        """
+        :param location: the next entity location
+        :return: None
+        """
+        self.location = location
+
+    def update_last_time(self, tnow):
+        """
+        :param tnow: next time update
+        :return: None
+        """
+        self.last_time_updated = tnow if tnow > self.last_time_updated else Exception\
+            ("times bug! last time in higher then tnow!")
+
+    def distance_from_other_entity(self, other):
+        """
+        :param other: other entity
+        :return: distance between self and other entity
+        :rtype: float
+        """
+        return calc_distance(self.location, other.location) if type(other) == Entity else Exception("Not an entity!")
+
+    def getId(self):
+        return self._id
+
+    def __str__(self):
+        return 'id: ' + self._id + ' location: '.join(self.location) + ' last time update: ' + self.last_time_updated
+
+    def __hash__(self):
+        return hash(self._id)
+
+    def __eq__(self, other):
+        return self._id == other._id
+
+
+# status for sp
 class Status(enum.Enum):
     """
     Enum that represents the status of the player in the simulation
@@ -15,13 +73,14 @@ class Status(enum.Enum):
     TO_MISSION = 2
 
 
+# basic sp: status, location, schedule, travel speed, skill and workload
 class ServiceProvider(Entity):
     """
     A class that represent a service provider
     """
 
-    def __init__(self, _id, time_born, location, speed, skills, status=Status.IDLE,
-                 base_location=None, productivity=1):
+    def __init__(self, _id, time_born,  speed, skills, status=Status.IDLE,
+                 base_location=None, productivity=1, location=[0.0, 0.0]):
         """
         :param _id: the entity id
         :rtype int
@@ -60,6 +119,14 @@ class ServiceProvider(Entity):
         """
         self.workload[skill] = capacity if skill in self.workload.keys() else False
 
+    def init_skill_workload(self, skills_set):
+        """
+        init all workload at ones
+        :param skills_set: {skill: units}
+        :return: None
+        """
+        self.workload = skills_set
+
     def provide_service(self, skill, workload):
         """
         reduce the workload of a skill
@@ -88,12 +155,13 @@ class ServiceProvider(Entity):
         self.workload[skill] = workload
 
 
+# basic sr: location, time_max, skills requirement, skills definition
 class ServiceRequester(Entity):
     """
         A class that represent a service provider
     """
 
-    def __init__(self, _id, time_born, location, skills, max_time=math.inf):
+    def __init__(self, _id, time_born,  skills, max_time=math.inf, location=[0.0, 0.0]):
         """
         :param _id: the entity id
         :rtype int
@@ -109,16 +177,24 @@ class ServiceRequester(Entity):
         """
         Entity.__init__(_id, time_born, location)
         self.max_time = max_time
-        self.skills = skills
-        self.skills_requirements = dict.fromkeys(skills, [0, 0, 1, max_time])
+        self.skills = skills  # list of skills
+        self.skills_requirements = dict.fromkeys(skills, 0)
         # initiate the requirements of each skill. dict-> Skill: workload=0
-        self.skills_definitions = dict.fromkeys(skills, [0, 1, max_time])
-        # initiate the definitions of each skill. dict-> Skill: [max utility=0,cap=1,max time=max_time]
 
+        self.max_required = dict.fromkeys(skills, 1)  # {skill: max_required} max cap for each skill
+        self.max_util = dict.fromkeys(skills, max_time)  # {skill: max_time} max_utile for each skill
         self.finished = False  # when all the skill requirements completed true
         self.cap = 1  # the benefit from working simultaneously on few services
         self.scheduled_services = [Service]
         # the services that were scheduled list of Service object
+
+    def init_skill_definition(self, skills_needed=None, max_required=None, max_util=None):
+        if skills_needed is not None:
+            self.skills_requirements = skills_needed
+        if max_required is not None:
+            self.max_required = max_required
+        if max_util is not None:
+            self.max_util = max_util
 
     def reduce_skill_requirement(self, skill, workload):
         """
@@ -149,14 +225,15 @@ class ServiceRequester(Entity):
         calc the utility from scheduled services - this is used in extend class
         :return: the utility from scheduled services
         """
-        raise Exception("This is an abstract method!")
+        raise NotImplementedError()
 
     def allocate_requirements_by_providable_skills_time_workload(self, skill, workload, start_time):
         """
         get a providable skills, start time and workload and scheduled them
         :return: update the self schedule raise exception - this is used in extend class
         """
-        raise Exception('This is an abstract method!')
+
+        raise NotImplementedError()
 
     def __str__(self):
         return " Service Require id: " + self._id + " last update time: " + self.last_time_updated +\
@@ -166,6 +243,7 @@ class ServiceRequester(Entity):
         return self._id == other._id
 
 
+# service: composed of a skill and the workload  and start time to be provided in an SR
 class Service:
     """
     a class that represent a service: composed of a skill and the workload to be provided in an SR
@@ -201,3 +279,74 @@ class Service:
         providers
         """
         return self.skill.calc_utility(self.workload, self.start_time)
+
+
+# the map for the problem
+class MapSimple:
+    """
+    The class represents a map for the simulation. The entities must be located by the def generate_location.
+    One map for each simulation.
+    """
+
+    def __init__(self, length, width, seed):
+        """
+        :param length: The length of the map
+        :param width: The length of the map
+        :param seed: seed for random object
+        """
+        self.length = length
+        self.width = width
+        global _length
+        _length = length
+        global _width
+        _width = width
+        self.rand = random.Random(seed)
+
+    def generate_location(self):
+        """
+        :return: random location on map
+        :type: list of floats
+        """
+        x1 = self.rand.random()
+        x2 = self.rand.random()
+        return [self.width*x1, self.length*x2]
+
+    def get_the_center_of_the_map_location(self):
+        return [self.width / 2, self.length / 2]
+
+
+# represent a skill
+class Skill:
+    """
+    Class that represent all the skills that entity can have or require
+    """
+    def __init__(self, skill_name=None, skill_id=0):
+        """
+
+        :param skill_name:  The skill type name (if dkill name is none, name = skill id as str)
+        :rtype str
+        :param skill_id: the skill id
+        :rtype int
+        """
+        self.skill_id = skill_id
+        self.skill_name = skill_name if skill_name is None else self.skill_name = str(self.skill_id)
+
+    def __eq__(self, other):
+        return self.skill_id == other.skill_id
+
+    def __str__(self):
+        return self.skill_name
+
+
+def calc_distance(location1, location2):
+    """
+    :param location1: entity 1 location list of coordination
+    :param location2: entity 1 location list of coordination
+    :return: Euclidean distance
+    :rtype float
+    """
+    return math.dist(location1, location2)
+
+
+def calc_distance_between_two_entities(entity1: Entity, entity2: Entity):
+    return calc_distance(entity1.location, entity2.location)

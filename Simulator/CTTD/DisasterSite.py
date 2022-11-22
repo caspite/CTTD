@@ -1,6 +1,4 @@
-import math
-
-from abstract_service_orientd_simulation.ServiceEntities import ServiceRequester
+from Simulator.SimulationComponents import ServiceRequester
 
 
 class DisasterSite(ServiceRequester):

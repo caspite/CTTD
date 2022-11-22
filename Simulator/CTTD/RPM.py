@@ -64,14 +64,24 @@ class RPM:
         if relative_rpm is None:
             relative_rpm = self._id
         if time > 360:  # if time is more than 360, go to last rpm function
-            return self.get_survival_by_time_deterioration(time - 360, self.deterioration[self._id][360 // 30 - 1])
+            return self.get_survival_by_time_deterioration(time - 360, self.deterioration[relative_rpm][360 // 30 - 1])
         rpm1, rpm2 = self.get_rpms_by_time(time, relative_rpm)
         slope = self.slope(rpm1, rpm2)
         survival = self.survival_probability[rpm1] + (time % 30) * slope
         return survival
 
-    def get_rpms_by_time(self, time, relative_rpm):
-        return self.deterioration[self._id][(time // 30) - 1], self.deterioration[self._id][time // 30]
+    def get_rpms_by_time(self, time, relative_rpm=None):
+        """
+
+        :param time: the time for the rpm
+        :param relative_rpm: used only in recursion
+        :return: int, int
+        """
+        if relative_rpm is None:
+            relative_rpm = self._id
+        if time > 360:  # if time is more than 360, go to last rpm function
+            self.get_rpm_by_time(time - 360, self.deterioration[relative_rpm][360 // 30 - 1])
+        return self.deterioration[relative_rpm][(time // 30) - 1], self.deterioration[relative_rpm][time // 30]
 
     def slope(self, rpm1=0, rpm2=0):
         """
