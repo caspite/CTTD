@@ -10,7 +10,7 @@ message_debug = True
 # message passing and communication objects
 class Msg(object):
 
-    def __init__(self, sender, receiver, information, is_with_perfect_communication):
+    def __init__(self, sender, receiver, information, is_with_perfect_communication=None):
         """
 
         :param sender: sender id
@@ -125,20 +125,18 @@ class Agent(threading.Thread, ABC):
         # agent variables
         self.introduction_flag = None
         self.t_now = t_now
-        self.neighbours_ids_list = []
+        self.neighbors = []  # all neighbors ids
         self.simulation_entity = simulation_entity  # all the information regarding the simulation entity
         self.inbox = None
         self.outbox = None
         self.mailer = None
-        self._id = Entity.getId()
+        self._id = simulation_entity.getId()
+        self.location = simulation_entity.location
 
-        # treading variables
-        threading.Thread.__init__(self)
-        self.cond = threading.Condition(threading.RLock())  # TODO update in solver
 
         # NCLO's
         self.atomic_counter = 0  # counter changes every computation
-        self.NCLO = ClockObject()  # an instance of an object with
+        self.NCLO = 0
 
     def meet_mailer(self, mailer_input):
         self.mailer = mailer_input
@@ -161,13 +159,13 @@ class Agent(threading.Thread, ABC):
         for i in self.simulation_entity.neighbors:
             self.add_neighbour_id(i)
 
-    @abc.abstractmethod
-    def reset(self):
-        """
-        reset fields of algorithm
-        :return:
-        """
-        raise NotImplementedError
+    # @abc.abstractmethod
+    # def reset(self):
+    #     """
+    #     reset fields of algorithm
+    #     :return:
+    #     """
+    #     raise NotImplementedError
 
     @abc.abstractmethod
     def initialize(self):
@@ -203,19 +201,16 @@ class Agent(threading.Thread, ABC):
         """
         raise NotImplementedError()
 
-    @abc.abstractmethod
-    def check_termination(self):
-        """
-        has the agent terminated its run
-        :return:
-        """
-        raise NotImplementedError()
-
-    def introduce_to_neighbors(self):
-        self.introduction_flag = True
+    # @abc.abstractmethod
+    # def check_termination(self):
+    #     """
+    #     has the agent terminated its run
+    #     :return:
+    #     """
+    #     raise NotImplementedError()
 
     @staticmethod
-    def number_of_comparisons(amount_chosen, amount_available):
+    def number_of_comparisons(amount_chosen=0, amount_available=0):
         """
         calc the NCLO
         :param amount_chosen:
@@ -224,7 +219,7 @@ class Agent(threading.Thread, ABC):
         """
         NCLO = 0
 
-        for i in range(1, amount_chosen+1):
+        for i in range(1, amount_chosen + 1):
             if amount_available <= 0:
                 break
 
@@ -233,8 +228,14 @@ class Agent(threading.Thread, ABC):
 
         return NCLO
 
+    def introduce_to_neighbors(self):
+        self.introduction_flag = True
+
     def __str__(self):
-        return "id: " + self._id
+        return "id: " + str(self._id)
+
+    def getId(self):
+        return self._id
 
 
 class Mailer(object):
@@ -276,15 +277,15 @@ class Mailer(object):
     def create_map_by_receiver(self, msgs_to_send):
         self.msg_receivers = {}
         for msg in msgs_to_send:
-            receiver = msg.receiver_id
+            receiver = msg.receiver
             if receiver not in self.msg_receivers:
                 self.msg_receivers[receiver] = []
             self.msg_receivers[receiver].append(msg)
 
     # finds agent by id (from providers and requesters)
     def get_agent_by_id(self, agent_id):
-        for agent in self.all_providers + self.all_requesters:
-            if agent.id_ == agent_id:
+        for agent in self.all_agents:
+            if agent.getId() == agent_id:
                 return agent
         else:
             return None
@@ -304,7 +305,7 @@ def an_agent_receive_msgs(receiver_agent, msgs_per_agent):
         for msg in msgs_per_agent:
             receiver_agent.agent_receive_a_single_msg(msg=msg)
 
-# todo add relevant methods to agent class
+
 # class Agent(threading.Thread, ABC):
 #     """
 #     list of abstract methods:

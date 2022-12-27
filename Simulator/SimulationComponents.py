@@ -1,6 +1,9 @@
+import abc
 import enum
 import random
 import math
+from abc import ABC
+import copy
 
 
 # represents all the simulation base abstract components
@@ -25,7 +28,6 @@ class Entity:
         self._id = _id
         self.last_time_updated = last_time_updated
         self.location = location
-        self.neighbors = []
 
     def update_location(self, location):
         """
@@ -62,6 +64,25 @@ class Entity:
     def __eq__(self, other):
         return self._id == other._id
 
+    @staticmethod # todo - copied from Agent to here because of loop import issues
+    def number_of_comparisons(amount_chosen=0, amount_available=0):
+        """
+        calc the NCLO
+        :param amount_chosen:
+        :param amount_available:
+        :return: NCLO
+        """
+        NCLO = 0
+
+        for i in range(1, amount_chosen + 1):
+            if amount_available <= 0:
+                break
+
+            NCLO += amount_available - 1
+            amount_available -= 1
+
+        return NCLO
+
 
 # status for sp
 class Status(enum.Enum):
@@ -74,7 +95,7 @@ class Status(enum.Enum):
 
 
 # basic sp: status, location, schedule, travel speed, skill and workload
-class ServiceProvider(Entity):
+class ServiceProvider(Entity, ABC):
     """
     A class that represent a service provider
     """
@@ -99,7 +120,7 @@ class ServiceProvider(Entity):
         :param productivity: entity productivity between 0 and 1
         :rtype float
         """
-        Entity.__init__(_id, time_born, location)
+        Entity.__init__(self, _id=_id, last_time_updated=time_born, location=location)
         self.productivity = productivity
         self.base_location = base_location
         self.status = status
@@ -154,9 +175,71 @@ class ServiceProvider(Entity):
     def reset_workload(self, skill, workload):
         self.workload[skill] = workload
 
+    def travel_time(self, start_location, end_location):
+        distance = calc_distance(start_location, end_location)
+        distance_in_time = round(distance / self.speed, 2)
+        return distance_in_time
+
+    def accept_offers(self, offers_received, allocation_version=0):
+        """
+        allocate the offers by the highest bid if ver is 0 else - send to another method
+        :return: NCLO, current_xi, response_offers
+        """
+        next_available_arrival_time = self.last_time_updated
+        next_available_location = copy.deepcopy(self.location)
+        next_available_skills = copy.deepcopy(self.workload)
+        allocate = True
+
+        # sort offers by utility (inner sort by arrival time)
+        offers_received = list(
+            sorted(offers_received, key=lambda offer:(offer.utility, -offer.arrival_time),
+                   reverse=True))
+        # NCLO
+        NCLO = 0
+        NCLO_offer_counter = 0
+        current_xi = {}
+        response_offers = []
+
+        for offer in offers_received:
+            offer.utility = None
+            travel_time = round(self.travel_time(next_available_location, offer.location), 2)
+
+            # accepting the offer as is (or arriving earlier)
+            if allocate and offer.arrival_time >= next_available_arrival_time + travel_time and \
+                    offer.amount <= next_available_skills[offer.skill] and offer.amount is not 0:
+                current_xi[len(current_xi)] = copy.deepcopy(offer)
+                # NCLO
+                NCLO_offer_counter += 1
+
+                next_available_arrival_time += travel_time
+                leave_time = round(next_available_arrival_time + \
+                                   offer.duration, 2)
+
+                offer.arrival_time = round(next_available_arrival_time, 2)
+                offer.leaving_time = None
+                offer.duration = None
+                amount_requested = offer.amount
+                offer.amount = next_available_skills[offer.skill]
+
+                next_available_skills[offer.skill] -= amount_requested
+                next_available_arrival_time = leave_time
+                next_available_location = copy.deepcopy(offer.location)
+
+            # cannot allocate as is - send best offer
+            else:
+                offer.arrival_time = round(next_available_arrival_time + travel_time, 2)
+                offer.amount = next_available_skills[offer.skill]
+                offer.leaving_time = None
+
+            response_offers.append(offer)
+
+        # NCLO
+        NCLO += super().number_of_comparisons(NCLO_offer_counter + 1, len(offers_received))
+        return NCLO, current_xi, response_offers
+
 
 # basic sr: location, time_max, skills requirement, skills definition
-class ServiceRequester(Entity):
+class ServiceRequester(Entity, ABC):
     """
         A class that represent a service provider
     """
@@ -175,7 +258,7 @@ class ServiceRequester(Entity):
         :rtype float
 
         """
-        Entity.__init__(_id, time_born, location)
+        Entity.__init__(self, _id=_id, last_time_updated=time_born, location=location)
         self.max_time = max_time
         self.skills = skills  # list of skills
         self.skills_requirements = dict.fromkeys(skills, 0)
@@ -187,6 +270,7 @@ class ServiceRequester(Entity):
         self.cap = 1  # the benefit from working simultaneously on few services
         self.scheduled_services = [Service]
         # the services that were scheduled list of Service object
+        self.simulation_times_for_utility = {}  # times for utility calculation
 
     def init_skill_definition(self, skills_needed=None, max_required=None, max_util=None):
         if skills_needed is not None:
@@ -220,12 +304,33 @@ class ServiceRequester(Entity):
         """
         self.scheduled_services.clear()
 
-    def calc_utility_by_schedule(self):
+    def calc_utility_by_schedule(self, skills=None, skill_iteration_schedule_plans=None):
+        if skills is None: skills = self.skills_requirements
         """
         calc the utility from scheduled services - this is used in extend class
         :return: the utility from scheduled services
         """
         raise NotImplementedError()
+
+    def calculate_current_utility(self):
+        """
+        :return: utility by schedule
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def calc_utility_to_offer(self, offer, bid_type=1):
+        """
+        :return: utility for an offer by bid type
+        """
+        raise NotImplementedError()
+
+    def calculate_current_skill_cover(self):
+        """
+        this method return the percent of skills that plant
+        :return:
+        """
+        raise NotImplementedError
 
     def allocate_requirements_by_providable_skills_time_workload(self, skill, workload, start_time):
         """
@@ -235,12 +340,23 @@ class ServiceRequester(Entity):
 
         raise NotImplementedError()
 
+    @abc.abstractmethod
+    def allocated_offers(self):
+        """
+        methods that allocated the SPs offers
+        :return: list of allocated offers to be sent back to the SPs
+        """
+
     def __str__(self):
         return " Service Require id: " + self._id + " last update time: " + self.last_time_updated +\
                 " current utility: " + self.calc_utility_by_schedule()
 
     def __eq__(self, other):
         return self._id == other._id
+
+    def reset_simulation_times_for_utility(self, skills):
+        for skill in skills.keys():
+            self.simulation_times_for_utility[skill] = {}
 
 
 # service: composed of a skill and the workload  and start time to be provided in an SR
@@ -329,7 +445,10 @@ class Skill:
         :rtype int
         """
         self.skill_id = skill_id
-        self.skill_name = skill_name if skill_name is None else self.skill_name = str(self.skill_id)
+        if skill_name is None:
+            self.skill_name = str(self.skill_id)
+        else:
+            self.skill_name = skill_name
 
     def __eq__(self, other):
         return self.skill_id == other.skill_id
