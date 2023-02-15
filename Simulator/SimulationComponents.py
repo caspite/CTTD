@@ -12,6 +12,34 @@ _width = None
 _length = None
 
 
+# abstract simulation creator
+class Simulation:
+    def __init__(self, number_of_providers, number_of_requesters, prob_id):
+        self.number_of_requesters = number_of_requesters
+        self.number_of_providers = number_of_providers
+        self.problem_id = prob_id
+        self.random_num = random.Random(prob_id)
+        self.requesters = []
+        self.providers = []
+
+    # creates locations for agents in a list according to the thresholds given in params
+    def create_initial_locations(self, agents, location_params):
+        min_x = location_params["location_min_x"]
+        max_x = location_params["location_max_x"]
+        min_y = location_params["location_min_y"]
+        max_y = location_params["location_max_y"]
+
+        for a in agents:
+            rand_x = round(self.random_num.uniform(min_x, max_x), 2)
+            rand_y = round(self.random_num.uniform(min_y, max_y), 2)
+            a.location = [rand_x, rand_y]
+
+    def get_agent(self, agent_id):
+        for agent in self.providers + self.requesters:
+            if agent.id_ == agent_id:
+                return agent
+
+
 # basic entity has id , update time and location
 class Entity:
     """
@@ -50,7 +78,7 @@ class Entity:
         :return: distance between self and other entity
         :rtype: float
         """
-        return calc_distance(self.location, other.location) if type(other) == Entity else Exception("Not an entity!")
+        return calc_distance(self.location, other.location)
 
     def getId(self):
         return self._id
@@ -111,7 +139,7 @@ class ServiceProvider(Entity, ABC):
         :rtype [float]
         :param speed: the service provider speed
         :rtype float
-        :param skills: list of providable skills
+        :param skills: list of providable skills_activities
         :rtype (skill)
         :param status: the service provider status in the simulation
         :rtype Status
@@ -132,7 +160,6 @@ class ServiceProvider(Entity, ABC):
 
     def update_workload_each_skill(self, skill, capacity):
         """
-
         :param skill: The skill
         :param capacity: The workload of the skill
         :rtype float
@@ -182,7 +209,7 @@ class ServiceProvider(Entity, ABC):
 
     def accept_offers(self, offers_received, allocation_version=0):
         """
-        allocate the offers by the highest bid if ver is 0 else - send to another method
+        allocate the offers by the ordered received
         :return: NCLO, current_xi, response_offers
         """
         next_available_arrival_time = self.last_time_updated
@@ -190,10 +217,6 @@ class ServiceProvider(Entity, ABC):
         next_available_skills = copy.deepcopy(self.workload)
         allocate = True
 
-        # sort offers by utility (inner sort by arrival time)
-        offers_received = list(
-            sorted(offers_received, key=lambda offer:(offer.utility, -offer.arrival_time),
-                   reverse=True))
         # NCLO
         NCLO = 0
         NCLO_offer_counter = 0
@@ -218,6 +241,7 @@ class ServiceProvider(Entity, ABC):
                 offer.arrival_time = round(next_available_arrival_time, 2)
                 offer.leaving_time = None
                 offer.duration = None
+                offer.missions = []
                 amount_requested = offer.amount
                 offer.amount = next_available_skills[offer.skill]
 
@@ -238,7 +262,7 @@ class ServiceProvider(Entity, ABC):
         return NCLO, current_xi, response_offers
 
 
-# basic sr: location, time_max, skills requirement, skills definition
+# basic sr: location, time_max, skills_activities requirement, skills_activities definition
 class ServiceRequester(Entity, ABC):
     """
         A class that represent a service provider
@@ -252,7 +276,7 @@ class ServiceRequester(Entity, ABC):
         :rtype float
         :param location: the current location of the entity - generated from map class
         :rtype [float]
-        :param skills: list of require skills
+        :param skills: list of require skills_activities
         :rtype [skill]
         :param max_time: the maximum time fo each skill need to complete (infinity if not initiate)
         :rtype float
@@ -260,8 +284,10 @@ class ServiceRequester(Entity, ABC):
         """
         Entity.__init__(self, _id=_id, last_time_updated=time_born, location=location)
         self.max_time = max_time
-        self.skills = skills  # list of skills
+        self.skills = skills  # list of skills_activities
         self.skills_requirements = dict.fromkeys(skills, 0)
+        self.skill_weights = dict.fromkeys(skills, 0.33)
+
         # initiate the requirements of each skill. dict-> Skill: workload=0
 
         self.max_required = dict.fromkeys(skills, 1)  # {skill: max_required} max cap for each skill
@@ -319,7 +345,7 @@ class ServiceRequester(Entity, ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def calc_utility_to_offer(self, offer, bid_type=1):
+    def calc_bid_to_offer(self, offer, bid_type=1):
         """
         :return: utility for an offer by bid type
         """
@@ -327,14 +353,14 @@ class ServiceRequester(Entity, ABC):
 
     def calculate_current_skill_cover(self):
         """
-        this method return the percent of skills that plant
+        this method return the percent of skills_activities that plant
         :return:
         """
         raise NotImplementedError
 
     def allocate_requirements_by_providable_skills_time_workload(self, skill, workload, start_time):
         """
-        get a providable skills, start time and workload and scheduled them
+        get a providable skills_activities, start time and workload and scheduled them
         :return: update the self schedule raise exception - this is used in extend class
         """
 
@@ -346,6 +372,20 @@ class ServiceRequester(Entity, ABC):
         methods that allocated the SPs offers
         :return: list of allocated offers to be sent back to the SPs
         """
+
+    def create_schedules_by_skill_by_SP_view(self, SP_view):
+        """
+        :param SP_view: [{sp:[variable_assignment]}]
+        :return: {skill:[variable_assignment]}
+        """
+        schedules_by_skill = {}
+        for xi in SP_view:
+            for value in xi.values():
+                if value.requester == self._id:
+                    if value.skill not in schedules_by_skill:
+                        schedules_by_skill[value.skill] = []
+                    schedules_by_skill[value.skill].append(value)
+        return schedules_by_skill
 
     def __str__(self):
         return " Service Require id: " + self._id + " last update time: " + self.last_time_updated +\
@@ -371,7 +411,7 @@ class Service:
         :rtype int
         :param sr: the service provider id
         :rtype: int
-        :param skill: skills needed to complete the service
+        :param skill: skills_activities needed to complete the service
         :rtype Skill
         :param start_time: the time to start the service
         :rtype float
@@ -434,7 +474,7 @@ class MapSimple:
 # represent a skill
 class Skill:
     """
-    Class that represent all the skills that entity can have or require
+    Class that represent all the skills_activities that entity can have or require
     """
     def __init__(self, skill_name=None, skill_id=0):
         """
@@ -469,3 +509,13 @@ def calc_distance(location1, location2):
 
 def calc_distance_between_two_entities(entity1: Entity, entity2: Entity):
     return calc_distance(entity1.location, entity2.location)
+
+
+def get_skill_amount_dict(offers):
+    skill_amount_dict = {}
+    for offer in offers:
+        skill_amount_dict[offer] = [offer.amount]
+        offer.amount = 0
+        offer.max_capacity = 0
+        offer.leaving_time = offer.arrival_time
+    return skill_amount_dict

@@ -2,7 +2,7 @@ import random
 from Simulator.AbstractSimulator import AbstractServiceRequester, AbstractServiceProvider
 from Simulator.AbstractSimulator.AbstractServiceRequester import Requester
 from Simulator.AbstractSimulator.AbstractServiceProvider import Provider
-from Simulator.SimulationComponents import Skill
+from Simulator.SimulationComponents import Skill, Simulation
 
 # problem variables
 
@@ -24,7 +24,7 @@ min_utility_threshold = 0  # less than this number = not worth the effort
 max_requester_duration = 5  # [hours] time fluctuation (from min needed to min needed + max_time_per_requester)
 mean_time_per_skill = 1  # time it takes to complete one skill unit
 
-# skills params
+# skills_activities params
 skill_params = {"num_skill_types": num_skill_types,
                                 "max_skill_ability_provided": max_skill_ability_provided,
                                 "max_skill_ability_needed": max_skill_ability_needed,
@@ -43,14 +43,14 @@ location_params = {"location_min_x": location_min_x, "location_max_x": location_
                                    "euclidian_distance_threshold": euclidian_distance_threshold}
 
 
-class AbstractSimulatorCreator:
+class AbstractSimulatorCreator(Simulation):
     def __init__(self, number_of_providers, number_of_requesters, prob_id):
+        Simulation.__init__(self, number_of_providers, number_of_requesters, prob_id)
 
         self.min_utility_threshold = utility_params["min_utility_threshold"]
         self.location_params = location_params
         self.utility_params = utility_params
-        self.random_num = random.Random(prob_id)
-        self.problem_id = prob_id
+
         # unpack skill info
         self.num_skill_types = skill_params["num_skill_types"]
         self.max_skill_ability_needed = skill_params["max_skill_ability_needed"]
@@ -61,26 +61,22 @@ class AbstractSimulatorCreator:
         self.mean_time_per_skill = skill_params["mean_time_per_skill"]
 
         # generate entities
-        self.number_of_requesters = number_of_requesters
-        self.max_requester_duration = max_requester_duration
-        self.number_of_providers = number_of_providers
-        self.travel_speed = travel_speed
 
-        self.requesters = []
+        self.max_requester_duration = max_requester_duration
+        self.travel_speed = travel_speed
         self.create_requesters()
-        self.providers = []
         self.create_providers()
         self.available_skills = []
         self.create_all_the_problem_skills()
 
         # create locations for all agents
-        self.create_initial_locations(self.providers)
-        self.create_initial_locations(self.requesters)
+        super().create_initial_locations(self.providers, location_params)
+        super().create_initial_locations(self.requesters, location_params)
 
     # creates all requesters
     def create_requesters(self):
         for i in range(self.number_of_providers, self.number_of_providers + self.number_of_requesters):
-            # randon needed skills and workload
+            # randon needed skills_activities and workload
             skills_needed = self.create_skills_dict_for_entity(self.max_skill_ability_needed)
             # random max cap for skill {Skill: int}
             max_required = self.get_required_per_skill(skills_chosen=skills_needed)
@@ -101,7 +97,6 @@ class AbstractSimulatorCreator:
         for i in range(self.number_of_providers):
             skill_set = self.create_skills_dict_for_entity(self.max_skill_ability_provided)
             provider = self.create_single_provider(id_=i, skill_set=skill_set)
-
             self.providers.append(provider)
 
     @staticmethod
@@ -123,10 +118,10 @@ class AbstractSimulatorCreator:
         # rand number of skill types to be chosen
         num_skills_to_choose = self.random_num.randint(1, self.num_skill_types)
 
-        # chooses skills without replacement
+        # chooses skills_activities without replacement
         skills_avail = list(range(0, self.num_skill_types))
 
-        # rand the skills type for the entity
+        # rand the skills_activities type for the entity
         skills_chosen = self.random_num.sample(population=skills_avail, k=num_skills_to_choose)
 
         # rand number of workload for each type
@@ -171,23 +166,6 @@ class AbstractSimulatorCreator:
         max_time = round(self.random_num.uniform(all_time * 3, all_time * 3 + self.max_requester_duration), 2)
 
         return max_time
-
-    # creates locations for agents in a list according to the thresholds given in params
-    def create_initial_locations(self, agents):
-        min_x = self.location_params["location_min_x"]
-        max_x = self.location_params["location_max_x"]
-        min_y = self.location_params["location_min_y"]
-        max_y = self.location_params["location_max_y"]
-
-        for a in agents:
-            rand_x = round(self.random_num.uniform(min_x, max_x), 2)
-            rand_y = round(self.random_num.uniform(min_y, max_y), 2)
-            a.location = [rand_x, rand_y]
-
-    def get_agent(self, agent_id):
-        for agent in self.providers + self.requesters:
-            if agent.id_ == agent_id:
-                return agent
 
     def __str__(self):
         return "Problem " + str(self.prob_id) + ", With " + str(len(self.requesters)) + " Requesters and " \

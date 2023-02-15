@@ -1,19 +1,21 @@
 from SynchronizedAlgorithms.RPA.RPA_agents import RpaSP, RpaSR
-from SynchronizedAlgorithms.SynchronizedSolver import SynchronizedSolverSOMAOP
+from SynchronizedAlgorithms.SynchronizedSolver import SynchronizedSolverSOMAOP, VariableAssignment
 import copy
 dbug = True
 
 
 class RPA(SynchronizedSolverSOMAOP):
-    def __init__(self, problem_id, providers, requesters,  max_iteration, bid_type=0, mailer=None, algorithm_version=0):
+    def __init__(self, problem_id, providers, requesters,  max_iteration, bid_type=0,
+                 mailer=None, algorithm_version=0, alfa=0.7):
 
         # version & bid
         self.bid_type = bid_type
         self.version = algorithm_version
+        self.alfa = alfa
 
         SPs = self.create_SPs(providers)
         SRs = self.create_SRs(requesters)
-        SynchronizedSolverSOMAOP.__init__(self,problem_id=problem_id, providers=SPs, requesters=SRs,
+        SynchronizedSolverSOMAOP.__init__(self, problem_id=problem_id, providers=SPs, requesters=SRs,
                                           mailer=mailer, termination=max_iteration)
 
         # measures
@@ -27,6 +29,8 @@ class RPA(SynchronizedSolverSOMAOP):
 
     def execute_algorithm(self):
         for iteration in range(-1, self.termination):
+            if dbug:
+                print("--------------------ITERATION " + str(iteration) +"------------")
             self.providers_react_to_msgs(iteration)
             self.agents_receive_msgs()
 
@@ -68,13 +72,14 @@ class RPA(SynchronizedSolverSOMAOP):
             all_SP_views[requester] = []
             for provider_id in requester.neighbors:
                 agent_object = self.get_agent_by_id(provider_id)
-                all_SP_views[requester].append(copy.deepcopy(agent_object.current_xi))
+                if len(agent_object.current_xi) > 0:
+                    all_SP_views[requester].append(agent_object.current_xi)
 
         return all_SP_views
 
     # create solver agents
     def create_SPs(self, simulation_providers_entities):
-        SPs = [RpaSP(simulation_entity=provider, algo_version=self.version)
+        SPs = [RpaSP(simulation_entity=provider, algo_version=self.version, alfa=self.alfa)
                for provider in simulation_providers_entities]
         return SPs
 

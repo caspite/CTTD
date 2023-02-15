@@ -1,6 +1,8 @@
 import copy
 import math
 from abc import ABC
+
+from Simulator.CTTD.MedicalUnit import MedicalUnit
 from Solver.SolverAbstract import Agent, Msg
 from Simulator.SimulationComponents import ServiceProvider, ServiceRequester
 
@@ -40,7 +42,10 @@ class SP(Agent, ABC):
         Agent.__init__(self, simulation_entity=simulation_entity, t_now=t_now)
         # Provider Variables
         self.util_i = {}
-        self.skill_set = simulation_entity.workload
+        if isinstance(simulation_entity, MedicalUnit):
+            self.skill_set = {key[0]: value for key, value in simulation_entity.workload.items()}
+        else:
+            self.skill_set = simulation_entity.skill_set
 
         # Algorithm Results
         self.neighbor_locations = {}  # {neighbor_id: location}

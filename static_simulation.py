@@ -1,19 +1,25 @@
+import copy
+import math
+import os
+import openpyxl as openpyxl
 import pandas as pd
 from Simulator.AbstractSimulator.AbstractSimulatorComponents import AbstractSimulatorCreator
 from Simulator.CTTD.CttdSimulatorComponents import CttdSimulatorComponents
 from Solver.SolverAbstract import Mailer, Agent
 from SynchronizedAlgorithms.RPA.Main_RPA import RPA
 
+
 dbug = True
-SR_amount = [1]
-SP_amount = [2]
+alfa = 0.7 # RPA dumping prop
+SR_amount = [2]  # [5, 10, 20]
+SP_amount = [3]  # [20, 40]
 problems_amount = 1
-algorithm_type = [1, 2]  # 1 - RPA/DSA, 2 - DSRM / none
-solver_type = [1, 2]  # 1-SOMAOP 2-DCOP
-simulation_type = [1, 2]  # 1 - abstract, 2 - cttd
-algorithm_version = [1]
-bid_type = [1, 2]  # 1 - regular bid, 2 - shapley
-termination = 250 # termination for RPA
+algorithm_type = ["RPA"]  # 1 - RPA, 2 - DSRM / none
+solver_type = ["SOMAOP"]  # 1-SOMAOP 2-DCOP
+simulation_type = [ "CTTD"]  # "Abstract", "CTTD"
+algorithm_version = [0, 1, 2]  # [0, 1, 2]
+bid_type = [1]  # 1 - regular bid, 2 - shapley, 3- contribution
+termination = 250  # termination for RPA
 
 # for DCOP privacy coherency
 assignmentPrivacy = [0.0, 0.25, 0.5, 0.75, 1]
@@ -30,9 +36,9 @@ def create_problems_simulation():
 
 
 def create_new_problem(problem_id):
-    if simulation == 1:
+    if simulation == "Abstract":
         new_prob = AbstractSimulatorCreator(number_of_providers=SP, number_of_requesters=SR, prob_id=problem_id)
-    elif simulation == 2:
+    elif simulation == "CTTD":
         new_prob = CttdSimulatorComponents(number_of_providers=SP, number_of_requesters=SR, prob_id=problem_id)
     return new_prob
 
@@ -41,15 +47,17 @@ def create_new_problem(problem_id):
 def solve_problems(in_problems):
     for problem in in_problems:
         solver = create_synchronized_solver(problem)
-        create_and_meet_mailer(solver.agents,problem.problem_id, solver)
+        create_and_meet_mailer(solver.agents, problem.problem_id, solver)
         solver.execute_algorithm()
+        update_problem_utility_new_version(solver.total_util_over_NCLO)
+        #update_problem_utility_over_NCLO(solver.total_util_over_NCLO)
 
 
 def create_synchronized_solver(problem):
-    if p_type == 1:
-        if algorithm == 1:
+    if p_type == "SOMAOP":
+        if algorithm.split("_")[0] == "RPA":
             return RPA(problem_id=problem.problem_id, providers=problem.providers, requesters=problem.requesters,
-                      max_iteration=termination, bid_type=bid,algorithm_version=version)
+                      max_iteration=termination, bid_type=bid, algorithm_version=version, alfa=alfa)
 
 
 def create_and_meet_mailer(agents: [Agent], problem_id, solver):
@@ -58,21 +66,182 @@ def create_and_meet_mailer(agents: [Agent], problem_id, solver):
     solver.meat_mailer(mailer)
     return mailer
 
+
 # export data to excel
 def to_excel():
-    string_name = "Simulator_%s_%s_problems_%s_SPs_%s_SRs"%(simulation, problems, SP, SR)
-    writer = pd.ExcelWriter(string_name + '.xlsx', engine='openpyxl')
-    writer.sheets = dict((ws.title, ws) for ws in writer.book.worksheets)
+    string_name = str("Utility_%s_problems_%s_SPs_%s_SRs_%s_simulator" % (problems_amount, SP, SR, simulation))
+    path = 'C:\\Users\\tehil\\OneDrive - post.bgu.ac.il\\python_simulation_outputs\\'
 
-    runInformation.to_excel(writer, sheet_name='Run Information')
+    writer = pd.ExcelWriter(path + string_name + '.xlsx', engine='openpyxl')
 
-    update_global_util_for_all_NCLOs()
-    globalUtilityOverNCLODF = pandas.DataFrame.from_dict(data=globalUtilityOverNCLO)
-    globalNCLOsDF = pandas.DataFrame(data=sorted(globalNCLOs), columns=['NCLO'])
-    globalNCLOsDF.to_excel(writer, sheet_name='New Global Utility Over NCLO', startcol=0, index=False)
-    globalUtilityOverNCLODF.to_excel(writer, sheet_name='New Global Utility Over NCLO', startcol=1, index=False)
+    sheet_run_info = 'Run Information ' + simulation
+    sheet_global_utility = 'Global Utility Over NCLO ' + simulation
+    runInformation.to_excel(writer, sheet_name=sheet_run_info)
+
+    update_global_util_for_all_NCLOs_new_ver()
+    globalUtilityOverNCLODF = pd.DataFrame.from_dict(data=global_utility_over_NCLO)
+    globalNCLOsDF = pd.DataFrame(data=sorted(globalNCLOs), columns=['NCLO'])
+    globalNCLOsDF.to_excel(writer, sheet_name=sheet_global_utility, startcol=0, index=False)
+    globalUtilityOverNCLODF.to_excel(writer, sheet_name=sheet_global_utility, startcol=1, index=False)
 
     writer.save()
+
+
+# init data frame for output
+def initiate_df():
+    columns = ['number_of_problems', 'number_of_providers', 'number_of_requesters', 'simulation_type']
+    runInformation = pd.DataFrame(columns=columns)
+    runInformation = runInformation.append(pd.DataFrame([[problems_amount, SP, SR, simulation]]
+                                                        , columns=columns), ignore_index=True)
+    return runInformation
+
+
+# add algorithm dict to df
+def initiate_data_frames_fo_algorithm():
+    global_utility_over_NCLO[algorithm] = {}
+
+
+def update_problem_utility_new_version(problem_utility_over_NCLO):
+    NCLOs = list(problem_utility_over_NCLO.keys())
+    last_value = 0
+    last_global_nclo_update = copy.deepcopy(global_utility_over_NCLO[algorithm])
+    # if this is the first experiment
+    if len(global_utility_over_NCLO[algorithm]) == 0:
+        global_utility_over_NCLO[algorithm] = copy.deepcopy(problem_utility_over_NCLO)
+        globalNCLOs.update(NCLOs)
+    else:
+        remaining_new_NCLOs = NCLOs
+        remaining_existing_NCLOs = list(global_utility_over_NCLO[algorithm].keys())
+        globalNCLOs.update(remaining_new_NCLOs + remaining_existing_NCLOs)
+        for nclo in NCLOs:
+            if nclo in last_global_nclo_update:
+                new_utility = last_global_nclo_update[nclo] + problem_utility_over_NCLO[nclo]
+                global_utility_over_NCLO[algorithm][nclo] = new_utility
+            else:
+                last_nclo = 0
+                for i in last_global_nclo_update.keys():
+                    if last_nclo < i < nclo: last_nclo = i
+
+                new_utility = 0 + problem_utility_over_NCLO[nclo]
+                if last_nclo in last_global_nclo_update.keys():
+                    new_utility = last_global_nclo_update[last_nclo] + problem_utility_over_NCLO[nclo]
+                global_utility_over_NCLO[algorithm][nclo] = new_utility
+
+            # update interval
+            for i in last_global_nclo_update.keys():
+                if nclo > i > last_value:
+                    new_utility = last_global_nclo_update[i] + problem_utility_over_NCLO[nclo]
+                    global_utility_over_NCLO[algorithm][i] = new_utility
+            last_value = nclo
+
+        # add last value to dict
+        for i in last_global_nclo_update.keys():
+            if i > last_value:
+                new_utility = last_global_nclo_update[i] + problem_utility_over_NCLO[last_value]
+                global_utility_over_NCLO[algorithm][i] = new_utility
+
+
+# add global utility solver
+def update_problem_utility_over_NCLO(problem_utility_over_NCLO):
+    NCLOs = list(problem_utility_over_NCLO.keys())
+    # if this is the first experiment
+    if len(global_utility_over_NCLO[algorithm]) == 0:
+        global_utility_over_NCLO[algorithm] = copy.deepcopy(problem_utility_over_NCLO)
+        globalNCLOs.update(NCLOs)
+    else:  # merge NCLO utility average
+        outcome_dict = {}
+        remaining_new_NCLOs = NCLOs
+        remaining_existing_NCLOs = list(global_utility_over_NCLO[algorithm].keys())
+        globalNCLOs.update(remaining_new_NCLOs + remaining_existing_NCLOs)
+        current_saved_new_utility = 0
+        current_saved_existing_utility = 0
+        current_saved_total_utility = 0
+        while remaining_new_NCLOs or remaining_existing_NCLOs:
+            if remaining_new_NCLOs:
+                new_NCLO = min(remaining_new_NCLOs)
+            else:
+                new_NCLO = math.inf
+            if remaining_existing_NCLOs:
+                existing_NCLO = min(remaining_existing_NCLOs)
+            else:
+                existing_NCLO = math.inf
+
+            if new_NCLO < existing_NCLO:  # need to add whats in the new
+                diff = problem_utility_over_NCLO[new_NCLO] - current_saved_new_utility
+                current_saved_total_utility += diff
+                current_saved_new_utility += diff
+                outcome_dict[new_NCLO] = current_saved_total_utility
+                remaining_new_NCLOs.remove(new_NCLO)
+            elif existing_NCLO < new_NCLO:
+                diff = global_utility_over_NCLO[algorithm][existing_NCLO] - current_saved_existing_utility
+                current_saved_total_utility += diff
+                current_saved_existing_utility += diff
+                outcome_dict[existing_NCLO] = current_saved_total_utility
+                remaining_existing_NCLOs.remove(existing_NCLO)
+            else:
+                diff1 = global_utility_over_NCLO[algorithm][existing_NCLO] - current_saved_existing_utility
+                current_saved_existing_utility += diff1
+                diff2 = problem_utility_over_NCLO[new_NCLO] - current_saved_new_utility
+                current_saved_new_utility += diff2
+                current_saved_total_utility += diff1 + diff2
+                outcome_dict[new_NCLO] = current_saved_total_utility
+                remaining_new_NCLOs.remove(new_NCLO)
+                remaining_existing_NCLOs.remove(existing_NCLO)
+
+        global_utility_over_NCLO[algorithm] = outcome_dict
+
+
+# update the global utility for df
+def update_global_util_for_all_NCLOs_new_ver():
+    for algo in global_utility_over_NCLO:
+        all_NCLOs_list = sorted(list(globalNCLOs))
+        new_dict = {}
+        last_utility = 0.0
+
+        for NCLO, utility in global_utility_over_NCLO[algo].items():
+            utility = float(utility)
+            for next_NCLO in copy.copy(all_NCLOs_list):
+                if next_NCLO < NCLO:
+                    new_dict[next_NCLO] = last_utility
+                    all_NCLOs_list.remove(next_NCLO)
+                elif next_NCLO == NCLO:
+                    new_dict[next_NCLO] = utility / problems_amount
+                else:
+                    break
+            last_utility = utility / problems_amount
+
+        for next_NCLO in copy.copy(all_NCLOs_list):
+            new_dict[next_NCLO] = last_utility
+
+        global_utility_over_NCLO[algo] = new_dict
+
+
+
+
+def update_global_util_for_all_NCLOs():
+    for algo in global_utility_over_NCLO:
+        all_NCLOs_list = sorted(list(globalNCLOs))
+
+        new_dict = {}
+        last_utility = 0.0
+
+        for NCLO, utility in global_utility_over_NCLO[algo].items():
+            utility = float(utility)
+            for next_NCLO in copy.copy(all_NCLOs_list):
+                if next_NCLO < NCLO:
+                    new_dict[next_NCLO] = last_utility
+                    all_NCLOs_list.remove(next_NCLO)
+                elif next_NCLO == NCLO:
+                    new_dict[next_NCLO] = utility
+                else:
+                    break
+            last_utility = utility
+
+        for next_NCLO in copy.copy(all_NCLOs_list):
+            new_dict[next_NCLO] = last_utility
+
+        global_utility_over_NCLO[algo] = new_dict
+
 
 # main run simulation
 if __name__ == '__main__':
@@ -80,10 +249,15 @@ if __name__ == '__main__':
         for SR in SR_amount:
             for SP in SP_amount:
                 if SP > SR:
+                    # output variables
+                    global_utility_over_NCLO = {}
+                    globalNCLOs = set()
                     for p_type in solver_type:
-                        runInformation = initiateRunInformationDF()
+                        runInformation = initiate_df()
                         for algorithm in algorithm_type:
                             for version in algorithm_version:
+                                algorithm = algorithm.split('_')[0] + '_' + str(version)
+                                initiate_data_frames_fo_algorithm()
                                 for bid in bid_type:
                                     if dbug:
                                         print("Running simulation. \n %s SPs, %s SRs problem type: "
@@ -91,4 +265,4 @@ if __name__ == '__main__':
                                               % (SP, SR, p_type, algorithm, version, bid))
                                     problems = create_problems_simulation()
                                     solve_problems(in_problems=problems)
-                                    to_excel()
+                            to_excel()

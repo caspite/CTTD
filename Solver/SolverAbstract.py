@@ -2,6 +2,8 @@ import abc
 import copy
 import threading
 from abc import ABC
+import random
+
 from Simulator.SimulationComponents import Entity
 
 message_debug = True
@@ -132,6 +134,7 @@ class Agent(threading.Thread, ABC):
         self.mailer = None
         self._id = simulation_entity.getId()
         self.location = simulation_entity.location
+        self.random_num = random.Random(self._id)
 
 
         # NCLO's

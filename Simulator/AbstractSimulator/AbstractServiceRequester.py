@@ -1,5 +1,5 @@
 import copy
-from Simulator.SimulationComponents import ServiceRequester
+from Simulator.SimulationComponents import ServiceRequester, get_skill_amount_dict
 
 
 class Requester(ServiceRequester):
@@ -112,7 +112,7 @@ class Requester(ServiceRequester):
                     del offers_skill_available_dict[offer_stats[0]]
         return allocated_offers, NCLO
 
-    def calc_utility_to_offer(self, skill, offer, bid_type):
+    def calc_bid_to_offer(self, skill, offer, bid_type):
         rate_of_util_fall = ((- self.max_util[skill] / self.rate_util_fall) / self.max_time)
         util_available = self.max_util[skill] + rate_of_util_fall * offer.arrival_time
         util_received = util_available * (offer.amount / self.skills_requirements[skill])
@@ -161,11 +161,10 @@ class Requester(ServiceRequester):
         if SP_view is None:
             schedules = allocated_offers
         else:
-            schedules = self.create_schedules_by_skill_by_SP_view(SP_view)
+            schedules = super().create_schedules_by_skill_by_SP_view(SP_view)
 
         for skill in schedules:
             schedules[skill] = sorted(schedules[skill], key=lambda item: item.arrival_time)
-
             simulation_times[skill] = {}
             leaving_times = []
             amount_working = 0
@@ -200,15 +199,6 @@ class Requester(ServiceRequester):
 
         return simulation_times
 
-    def create_schedules_by_skill_by_SP_view(self, SP_view):
-        schedules_by_skill = {}
-        for xi in SP_view:
-            for value in xi.values():
-                if value.requester == self._id:
-                    if value.skill not in schedules_by_skill:
-                        schedules_by_skill[value.skill] = []
-                    schedules_by_skill[value.skill].append(value)
-        return schedules_by_skill
 
 
 def update_unallocated(offers):
@@ -217,13 +207,7 @@ def update_unallocated(offers):
         offer.amount = 0
 
 
-def get_skill_amount_dict(offers):
-    skill_amount_dict = {}
-    for offer in offers:
-        skill_amount_dict[offer] = [offer.amount]
-        offer.amount = 0
-        offer.leaving_time = offer.arrival_time
-    return skill_amount_dict
+
 
 
 # 2 - cap function, defining the efficiency of a team at the SR

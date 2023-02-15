@@ -1,8 +1,9 @@
 from Simulator.CTTD.RPM import RPM
+import copy
 
 
 class Casualty:
-    def __init__(self, init_RPM=12, triage='NON_URGENT', t_born=0, _id=0, disaster_site_id=0,):
+    def __init__(self, init_RPM=12, t_born=0, _id=0, disaster_site_id=0):
         """
         :type init_RPM: int
         :type t_born: float
@@ -13,7 +14,8 @@ class Casualty:
         self.disaster_site_id = disaster_site_id
         self._id = _id
         self._t_born = t_born
-        self._init_RPM = RPM(init_RPM, triage)
+        self._init_RPM = RPM(init_RPM)
+        self.triage = self._init_RPM.triage
         self.current_RPM = self._init_RPM
         self.activities = ('treatment', 'uploaded', 'transportation')
         self.scheduled_activities = {k: None for k in self.activities}  # activity: [rpm_at_start_time, start_time,duration](float)
@@ -50,7 +52,7 @@ class Casualty:
         self.preformed_activities[activity] = [start_time, time]
         self.last_update_time = start_time + time  # last update time is after performance
 
-    def receive_treatment(self,start_time):
+    def receive_treatment(self, start_time):
         self.update_performances_activities(activity='treatment', start_time=start_time)
 
     def uploaded(self, start_time):
@@ -102,7 +104,30 @@ class Casualty:
         idle_time = time - self.last_schedule_time
         for activity in self.scheduled_activities.keys():
             rpm = self.scheduled_activities[activity][1]
-        return idle_time,rpm
+        return idle_time, rpm
+
+    def survival_by_time(self, time):
+        return self.current_RPM.get_survival_by_time_deterioration(time)
+
+    def get_triage_by_time(self, time):
+        return self.current_RPM.get_triage_by_time(time)
+
+    def get_potential_survival_by_start_time(self, time):
+        return self.current_RPM.get_survival_potential_by_time(time)
+
+    def get_care_time(self, skill, time):
+        if skill == 'treatment':
+            return self.current_RPM.get_care_by_time(time)
+        elif skill == 'uploading':
+            return self.current_RPM.get_uploading_by_time(time)
+        else:
+            return 0.0
+
+    def get_id(self):
+        return copy.copy(self._id)
+
+    def get_triage(self):
+        return self.get_triage_by_time(self.last_update_time)
 
     def __eq__(self, other):
         return self._id == other._id
@@ -110,3 +135,6 @@ class Casualty:
     def __str__(self):
         return 'Id: '+self._id + ' RPM: '+self._init_RPM + ' schedule status: ' + self.scheduled_status \
                + 'preformed status: ' + self.preformed_status
+
+    def __hash__(self):
+        return self._id

@@ -1,14 +1,19 @@
 import copy
 import math
 
+from Simulator.CTTD.MedicalUnit import MedicalUnit
 from Solver.SOMAOP.BasicSOMAOP import SP, SR
 
 dbug = True
 
 
 class VariableAssignment:
-    def __init__(self, provider, requester, skill, location, amount=None, duration=None, arrival_time=None, leaving_time=None,
-                 utility=None):
+    def __init__(self, provider=None, requester=None, skill=None, location=None, amount=None, duration=0.0, arrival_time=None, leaving_time=None,
+                 utility=None, mission=None, max_capacity=None, original_object=None):
+        if original_object is not None:
+            self.copy_constructor(original_object)
+            return
+
         self.provider = provider
         self.requester = requester
         self.skill = skill
@@ -18,6 +23,24 @@ class VariableAssignment:
         self.arrival_time = arrival_time
         self.leaving_time = leaving_time
         self.utility = utility
+        self.max_capacity = max_capacity
+        if mission is None:
+            self.mission = []
+        else:
+            self.mission = mission
+
+    def copy_constructor(self, original):
+        self.provider = original.provider
+        self.requester = original.requester
+        self.skill = original.skill
+        self.location = original.location
+        self.amount = original.amount
+        self.duration = original.duration
+        self.arrival_time = original.arrival_time
+        self.leaving_time = original.leaving_time
+        self.utility = original.utility
+        self.mission = original.mission
+        self.max_capacity = original.max_capacity
 
     def __str__(self):
         return "SP " + str(self.provider) + " SR " + str(self.requester) + " skill " + str(self.skill) + \
@@ -26,7 +49,9 @@ class VariableAssignment:
 
     # for comparing with ==
     def __eq__(self, other):
-        return self.provider == other.provider and self.requester == other.requester and self.skill == other.skill
+        return self.provider == other.provider and self.requester == other.requester \
+               and self.skill == other.skill and self.arrival_time == other.arrival_time
+
 
     # for inserting in hashable objects like list
     def __hash__(self):
@@ -51,10 +76,11 @@ class SynchronizedSolverSOMAOP(object):
 
         # NCLO variables
         self.NCLO = 0
-        self.total_util_over_NCLO = {0: 0}
+        self.total_util_over_NCLO = {}
 
         # initialized
         self.assign_neighbors()
+
 
     # 3 - creates neighboring agents by threshold distance - symmetrical
     def assign_neighbors(self):
@@ -73,6 +99,9 @@ class SynchronizedSolverSOMAOP(object):
                         provider.xi_size += 1
                         domain_opt = VariableAssignment(provider.getId(), requester.getId(), skill,
                                                         copy.deepcopy(requester.location))
+                        if isinstance(provider.simulation_entity, MedicalUnit):
+                            domain_opt.max_capacity = copy.deepcopy(provider.simulation_entity.get_max_capacity())
+
                         provider.domain.append(domain_opt)
                     provider.neighbor_locations[requester.getId()] = copy.deepcopy(requester.location)
 
