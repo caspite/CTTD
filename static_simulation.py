@@ -11,12 +11,12 @@ from SynchronizedAlgorithms.RPA.Main_RPA import RPA
 
 dbug = True
 alfa = 0.7 # RPA dumping prop
-SR_amount = [2]  # [5, 10, 20]
-SP_amount = [3]  # [20, 40]
-problems_amount = 1
+SR_amount = [3]  # [5, 10, 20]
+SP_amount = [5]  # [20, 40]
+problems_amount = 10
 algorithm_type = ["RPA"]  # 1 - RPA, 2 - DSRM / none
 solver_type = ["SOMAOP"]  # 1-SOMAOP 2-DCOP
-simulation_type = [ "CTTD"]  # "Abstract", "CTTD"
+simulation_type = ["CTTD"]  # "Abstract", "CTTD"
 algorithm_version = [0, 1, 2]  # [0, 1, 2]
 bid_type = [1]  # 1 - regular bid, 2 - shapley, 3- contribution
 termination = 250  # termination for RPA
@@ -50,7 +50,7 @@ def solve_problems(in_problems):
         create_and_meet_mailer(solver.agents, problem.problem_id, solver)
         solver.execute_algorithm()
         update_problem_utility_new_version(solver.total_util_over_NCLO)
-        #update_problem_utility_over_NCLO(solver.total_util_over_NCLO)
+        # update_problem_utility_over_NCLO(solver.total_util_over_NCLO)
 
 
 def create_synchronized_solver(problem):
@@ -77,7 +77,7 @@ def to_excel():
     sheet_run_info = 'Run Information ' + simulation
     sheet_global_utility = 'Global Utility Over NCLO ' + simulation
     runInformation.to_excel(writer, sheet_name=sheet_run_info)
-
+    # update_global_util_for_all_NCLOs()
     update_global_util_for_all_NCLOs_new_ver()
     globalUtilityOverNCLODF = pd.DataFrame.from_dict(data=global_utility_over_NCLO)
     globalNCLOsDF = pd.DataFrame(data=sorted(globalNCLOs), columns=['NCLO'])
@@ -118,11 +118,11 @@ def update_problem_utility_new_version(problem_utility_over_NCLO):
                 new_utility = last_global_nclo_update[nclo] + problem_utility_over_NCLO[nclo]
                 global_utility_over_NCLO[algorithm][nclo] = new_utility
             else:
-                last_nclo = 0
+                last_nclo = min(min(remaining_new_NCLOs), min(remaining_existing_NCLOs))
                 for i in last_global_nclo_update.keys():
                     if last_nclo < i < nclo: last_nclo = i
 
-                new_utility = 0 + problem_utility_over_NCLO[nclo]
+                new_utility = problem_utility_over_NCLO[nclo] + problem_utility_over_NCLO[nclo]
                 if last_nclo in last_global_nclo_update.keys():
                     new_utility = last_global_nclo_update[last_nclo] + problem_utility_over_NCLO[nclo]
                 global_utility_over_NCLO[algorithm][nclo] = new_utility
@@ -197,8 +197,8 @@ def update_global_util_for_all_NCLOs_new_ver():
         all_NCLOs_list = sorted(list(globalNCLOs))
         new_dict = {}
         last_utility = 0.0
-
-        for NCLO, utility in global_utility_over_NCLO[algo].items():
+        global_utility_over_NCLO_sorted = dict(sorted(global_utility_over_NCLO[algo].items()))
+        for NCLO, utility in global_utility_over_NCLO_sorted.items():
             utility = float(utility)
             for next_NCLO in copy.copy(all_NCLOs_list):
                 if next_NCLO < NCLO:

@@ -35,7 +35,7 @@ medical_unit_type_probabilities = {'ALS': 0.2, 'BLS': 0.6, 'MOTORCYCLE': 0.2}
 
 # skill & medical units  params
 skills_activities = {'treatment': 1, 'uploading': 2, 'transportation': 3}
-skills_weights =  {'treatment': 0.5, 'uploading': 0.3, 'transportation': 0.2}
+skills_weights =  {'treatment': 1, 'uploading': 0.5, 'transportation': 0.2}
 triage = {'URGENT': 30, 'MEDIUM': 15, 'NON_URGENT': 10}  # {triage: score}
 skills = {(key, item): value for key, value in skills_activities.items() for item in triage.keys()}
 

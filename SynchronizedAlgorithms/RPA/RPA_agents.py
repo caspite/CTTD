@@ -85,10 +85,14 @@ class RpaSR(SR):
 
 
     def print_response_offers(self):
-        print("print offers:")
+        print("offers from SR: " + str(self._id))
         for offer in self.offers_to_send:
-            print("sp: %s, sr: %s skill: %s, bid: %s, arrival_time: %s, munber of missions: %s"
+            print("sp: %s, sr: %s skill: %s, bid: %s, arrival_time: %s, numer of missions: %s"
                   % (offer.provider, offer.requester, offer.skill, offer.utility, offer.arrival_time, len(offer.mission)))
+            for mission in offer.mission:
+                print("arrival time %s, casualty id: %s, survival probability: %s ||" %
+                      (mission['arrival_time'], mission['mission'].get_id(), round(mission['mission'].get_potential_survival_by_start_time(
+                    0.0), 2)))
 
 
 
@@ -130,7 +134,6 @@ class RpaSP(SP):
 
     def accept_offers(self):
 
-
         if self.algorithm_version == 0: # orderd by bid
             # sort offers by bid (inner sort by arrival time)
             self.offers_received = list(
@@ -141,7 +144,7 @@ class RpaSP(SP):
         if self.algorithm_version == 2:  # ordered offers by dumping
             self.update_offers_bid_by_dumping()
             self.ordered_offers_by_sa()
-        if dbug: self.print_offers_received()
+
         self.NCLO, self.current_xi, self.response_offers = self.simulation_entity.accept_offers(self.offers_received)
         if dbug:
             self.print_response_offers()
@@ -172,8 +175,8 @@ class RpaSP(SP):
             if offer.skill not in self.dumping_bids[offer.requester]:
                 self.dumping_bids[offer.requester][offer.skill] = offer.utility
             else:
-                offer.utility = self.alfa * offer.utility + \
-                                (1 - self.alfa) * self.dumping_bids[offer.requester][offer.skill]
+                offer.utility = round(self.alfa * offer.utility + \
+                                (1 - self.alfa) * self.dumping_bids[offer.requester][offer.skill],2)
 
 
 
@@ -198,7 +201,7 @@ class RpaSP(SP):
              % (offer.provider, offer.requester, offer.skill, offer.utility,  offer.arrival_time, len(offer.mission)))
 
     def print_response_offers(self):
-        print("print response offers:")
+        print("offers from SP: "+str(self._id))
         for offer in self.response_offers:
             print("sp: %s, sr: %s skill: %s, bid: %s, arrival_time: %s, munber of missions: %s"
                   % (offer.provider, offer.requester, offer.skill, offer.utility, offer.arrival_time, len(offer.mission)))

@@ -123,33 +123,41 @@ class MedicalUnit(ServiceProvider):
                 next_available_arrival_time = leave_time
                 next_available_location = copy.deepcopy(offer.location)
                 capacity -= offer.max_capacity
-                offer.max_capacity = (self._max_capacity[0], copy.copy(offer.max_capacity))  # todo capacity??
+                offer.max_capacity = (self._max_capacity[0], copy.copy(offer.max_capacity))
             # cannot allocate as is - send best offer
             else:
+                # if capacity <=0:
+                #     # got go hospital and refill
+                #     travel_time_to_hospital = round(self.travel_time(next_available_location, self.near_hospital), 2)
+                #     next_available_location = copy.copy(self.near_hospital)
+                #     travel_time = travel_time_to_hospital
+                #     next_available_skills = {key[0]: value for key, value in self.workload.items()}
+                #     capacity = copy.copy(self._max_capacity[1])
+
                 offer.arrival_time = round(next_available_arrival_time + travel_time, 2)
                 offer.amount = next_available_skills[offer.skill]
                 offer.max_capacity = (self._max_capacity[0], capacity)
                 offer.leaving_time = None
                 offer.missions = []
+            if offer not in response_offers:
+                response_offers.append(offer)
 
-            response_offers.append(offer)
-        # got go hospital and refill
-        travel_time_to_hospital = round(self.travel_time(next_available_location, self.near_hospital), 2)
-        next_available_location = copy.copy(self.near_hospital)
-        travel_time = travel_time_to_hospital
-        next_available_skills = {key[0]: value for key, value in self.workload.items()}
-        capacity = copy.copy(self._max_capacity[1])
-
-        # send next available time and skills after refill:
-        for requester, skill, location in all_providable_skills:
-            travel_time = round(self.travel_time(next_available_location, location), 2)
-            arrival_time = round(next_available_arrival_time + travel_time,2)
-            offer = VariableAssignment(provider=self._id, requester=requester,skill=skill,
-                               amount=next_available_skills[skill],arrival_time=arrival_time,
-                                       max_capacity=(self._max_capacity[0], capacity),location=location )
-            response_offers.append(offer)
-
-
+        # # got go hospital and refill
+        # travel_time_to_hospital = round(self.travel_time(next_available_location, self.near_hospital), 2)
+        # next_available_location = copy.copy(self.near_hospital)
+        # travel_time = travel_time_to_hospital
+        # next_available_skills = {key[0]: value for key, value in self.workload.items()}
+        # capacity = copy.copy(self._max_capacity[1])
+        #
+        # # send next available time and skills after refill:
+        # for requester, skill, location in all_providable_skills:
+        #     travel_time = round(self.travel_time(next_available_location, location), 2)
+        #     arrival_time = round(next_available_arrival_time + travel_time,2)
+        #     offer = VariableAssignment(provider=self._id, requester=requester,skill=skill,
+        #                        amount=next_available_skills[skill],arrival_time=arrival_time,
+        #                                max_capacity=(copy.copy(self._max_capacity[0]), capacity),location=location )
+        #     if offer not in response_offers:
+        #         response_offers.append(offer)
 
         # NCLO
         NCLO += super().number_of_comparisons(NCLO_offer_counter + 1, len(offers_received))

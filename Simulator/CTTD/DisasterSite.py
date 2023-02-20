@@ -20,7 +20,8 @@ def update_offers_times(allocated_offers):
     for skill in allocated_offers.keys():
         for offer in allocated_offers[skill]:
             if len(offer.mission) == 0:
-                continue
+                offer.max_capacity = 0
+                offer.amount = 0
             else:
                 offer.amount = len(offer.mission)
                 offer.arrival_time = min(d['arrival_time'] for d in offer.mission)
@@ -44,7 +45,7 @@ def capacity_per_provider(offers):
     return dict_providers_capacities
 
 
-def sort_casualties_by_threshold(casualties, time_arrival, threshold=0.4):
+def sort_casualties_by_threshold(casualties, time_arrival=0.0, threshold=0.4):
         above_threshold = [x for x in casualties if x[0].survival_by_time(max(x[1], time_arrival)) > threshold]
         below_threshold = [x for x in casualties if x[0].survival_by_time(max(x[1], time_arrival)) <= threshold]
         below_threshold.sort(key=lambda x: x[0].survival_by_time(max(x[1], time_arrival)), reverse=True)
@@ -57,6 +58,10 @@ def sort_casualties_by_threshold(casualties, time_arrival, threshold=0.4):
             print("below_threshold: " + ", ".join(below_threshold_survival))
         return above_threshold + below_threshold
 
+
+def sort_casualties_by_potential_survival(casualties, time_arrival):
+    casualties.sort(key=lambda x: x[0].get_potential_survival_by_start_time(max(x[1], time_arrival)))
+    return casualties
 
 def create_schedule_for_casualties(casualties_needed_activities_temp, schedules):
     """
@@ -120,6 +125,7 @@ class DisasterSite(ServiceRequester, ABC):
 
     # 1- allocate offers to SPs
     def allocated_offers(self, skills_needed, offers_received_by_skill):
+
         """
         method that used by solver agents -
         :param skills_needed
@@ -128,6 +134,7 @@ class DisasterSite(ServiceRequester, ABC):
         :type {skill: (variableAssignment)}
         :return: {skill: set(variableAssignment)} , NCLO (int)
         """
+
         NCLO = 1
         allocated_offers = {}
         # sort skills_activities by activity
@@ -142,7 +149,7 @@ class DisasterSite(ServiceRequester, ABC):
         # dict of provider with capacity {provider_id: double (0-1)}
         capacities = {offer.provider: list(copy.deepcopy(offer.max_capacity))
                       for offer_list in offers_received_by_skill.values()
-                      for offer in offer_list}
+                      for offer in offer_list if offer.utility is not 0}
 
         # dict {provider: next_available_time}
         providers_next_time = self.create_provider_next_time(offers_received_by_skill)  # todo - necessary??
@@ -191,9 +198,9 @@ class DisasterSite(ServiceRequester, ABC):
                     if (next_casualty is None):
                         del offers_skill_available_dict[offer_stats[0]]
                         offer_stats[0].amount = 0
-                        allocated_offers[skill].add(offer_stats[0])
+
                     else:
-                        start_time = max(offer_stats[0].arrival_time, next_casualty[1])
+                        start_time = max(next_time, next_casualty[1])
                         duration = next_casualty[0].get_care_time(skill, offer_stats[0].arrival_time)
                         leaving_time = start_time + duration
                         offer_stats[0].mission.append({'mission': next_casualty[0], 'arrival_time': start_time,
@@ -216,6 +223,7 @@ class DisasterSite(ServiceRequester, ABC):
                         capacity_to_reduce = get_skill_capacity_points(next_casualty[0].get_triage_by_time(offer_stats[0].arrival_time))
                         capacities[offer_stats[0].provider][1] -= capacity_to_reduce
                         offer_stats[0].max_capacity += capacity_to_reduce
+                    if offer_stats[0] not in allocated_offers[skill]:
                         allocated_offers[skill].add(offer_stats[0])
         update_offers_times(allocated_offers)
         return allocated_offers, NCLO
@@ -234,7 +242,10 @@ class DisasterSite(ServiceRequester, ABC):
                       casualties_by_id if cas.get_id() == i]  # (casualty, last_time_update)
 
         # [(casualty, next_time)]
-        sorted_casualties = sort_casualties_by_threshold(casualties, arrival_time, threshold=0.4)
+        sorted_casualties = sort_casualties_by_threshold(casualties, threshold=0.4)
+        # sorted_casualties = sort_casualties_by_threshold(casualties, arrival_time, threshold=0.4)
+        # sorted_casualties = sorted(casualties, key=lambda x: x[0].get_potential_survival_by_start_time(0.0))
+
         for cas in sorted_casualties:
             triage = None
             if initial_triage_time:
@@ -317,10 +328,10 @@ class DisasterSite(ServiceRequester, ABC):
                 current_RPM = current_RPM.get_rpm_by_time(last_update_time)
                 care_time = casualty.get_care_time(skill, last_update_time)
 
-                if len(schedule) == 0 or len(schedule) > 0 : # todo - all activities?
-                    survival_probability = current_RPM.get_survival_by_time_deterioration()
-                    casualties_survival_prob[casualty] = survival_probability
-                    break
+                # todo - all activities? if len(schedule) == 3
+                survival_probability = current_RPM.get_survival_by_time_deterioration()
+                casualties_survival_prob[casualty] = survival_probability
+                break
         return casualties_survival_prob
 
     def calc_bid_to_offer(self, skill, offer, bid_type):
@@ -335,6 +346,9 @@ class DisasterSite(ServiceRequester, ABC):
         if bid_type == 1:
             if len(offer.mission) > 0:
                 minimum_time_cas = min(offer.mission, key=lambda x: x['arrival_time'])
+                # bid = round(minimum_time_cas['mission'].survival_by_time(
+                #     minimum_time_cas['arrival_time']), 2)
                 bid = round(minimum_time_cas['mission'].get_potential_survival_by_start_time(
-                    minimum_time_cas['arrival_time']) * self.skill_weights[skill], 2)
+                    0.0), 2)
+
         return bid

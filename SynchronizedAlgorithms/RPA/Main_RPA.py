@@ -47,7 +47,6 @@ class RPA(SynchronizedSolverSOMAOP):
                 provider.initialize()
             else:
                 provider.compute()
-
             provider.send_msgs()
 
     def requesters_react_to_msgs(self):
