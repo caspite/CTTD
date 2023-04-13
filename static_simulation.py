@@ -8,17 +8,16 @@ from Simulator.CTTD.CttdSimulatorComponents import CttdSimulatorComponents
 from Solver.SolverAbstract import Mailer, Agent
 from SynchronizedAlgorithms.RPA.Main_RPA import RPA
 
-
 dbug = True
-alfa = 0.7 # RPA dumping prop
-SR_amount = [3]  # [5, 10, 20]
-SP_amount = [5]  # [20, 40]
-problems_amount = 10
+alfa = 0.7  # RPA dumping prop
+SR_amount = [2]  # [5, 10, 20]
+SP_amount = [3]  # [5,10,15,20,25,30,35,40]
+problems_amount = 1
 algorithm_type = ["RPA"]  # 1 - RPA, 2 - DSRM / none
 solver_type = ["SOMAOP"]  # 1-SOMAOP 2-DCOP
 simulation_type = ["CTTD"]  # "Abstract", "CTTD"
-algorithm_version = [0, 1, 2]  # [0, 1, 2]
-bid_type = [1]  # 1 - regular bid, 2 - shapley, 3- contribution
+algorithm_version = [4] # [0, 1, 2, 3]
+bid_type = [1]  # 1 - coverage bid, 2 - shapley, 3- contribution
 termination = 250  # termination for RPA
 
 # for DCOP privacy coherency
@@ -57,7 +56,7 @@ def create_synchronized_solver(problem):
     if p_type == "SOMAOP":
         if algorithm.split("_")[0] == "RPA":
             return RPA(problem_id=problem.problem_id, providers=problem.providers, requesters=problem.requesters,
-                      max_iteration=termination, bid_type=bid, algorithm_version=version, alfa=alfa)
+                       max_iteration=termination, bid_type=bid, algorithm_version=version, alfa=alfa)
 
 
 def create_and_meet_mailer(agents: [Agent], problem_id, solver):
@@ -115,29 +114,33 @@ def update_problem_utility_new_version(problem_utility_over_NCLO):
         globalNCLOs.update(remaining_new_NCLOs + remaining_existing_NCLOs)
         for nclo in NCLOs:
             if nclo in last_global_nclo_update:
-                new_utility = last_global_nclo_update[nclo] + problem_utility_over_NCLO[nclo]
+                remaining_existing_NCLOs.remove(nclo)
+                new_utility = (last_global_nclo_update[nclo] + problem_utility_over_NCLO[nclo]) / 2
                 global_utility_over_NCLO[algorithm][nclo] = new_utility
             else:
                 last_nclo = min(min(remaining_new_NCLOs), min(remaining_existing_NCLOs))
-                for i in last_global_nclo_update.keys():
-                    if last_nclo < i < nclo: last_nclo = i
 
-                new_utility = problem_utility_over_NCLO[nclo] + problem_utility_over_NCLO[nclo]
+                for i in last_global_nclo_update.keys():
+                    if last_nclo < i < nclo:
+                        last_nclo = i
+
+                new_utility = problem_utility_over_NCLO[nclo] + 0
                 if last_nclo in last_global_nclo_update.keys():
-                    new_utility = last_global_nclo_update[last_nclo] + problem_utility_over_NCLO[nclo]
+                    new_utility = (last_global_nclo_update[last_nclo] + problem_utility_over_NCLO[nclo]) / 2
                 global_utility_over_NCLO[algorithm][nclo] = new_utility
 
             # update interval
             for i in last_global_nclo_update.keys():
                 if nclo > i > last_value:
-                    new_utility = last_global_nclo_update[i] + problem_utility_over_NCLO[nclo]
+                    new_utility = (last_global_nclo_update[i] + problem_utility_over_NCLO[nclo]) / 2
                     global_utility_over_NCLO[algorithm][i] = new_utility
+
             last_value = nclo
 
         # add last value to dict
         for i in last_global_nclo_update.keys():
             if i > last_value:
-                new_utility = last_global_nclo_update[i] + problem_utility_over_NCLO[last_value]
+                new_utility = (last_global_nclo_update[i] + problem_utility_over_NCLO[last_value]) / 2
                 global_utility_over_NCLO[algorithm][i] = new_utility
 
 
@@ -205,17 +208,15 @@ def update_global_util_for_all_NCLOs_new_ver():
                     new_dict[next_NCLO] = last_utility
                     all_NCLOs_list.remove(next_NCLO)
                 elif next_NCLO == NCLO:
-                    new_dict[next_NCLO] = utility / problems_amount
+                    new_dict[next_NCLO] = utility  # / problems_amount
                 else:
                     break
-            last_utility = utility / problems_amount
+            last_utility = utility  # / problems_amount
 
         for next_NCLO in copy.copy(all_NCLOs_list):
             new_dict[next_NCLO] = last_utility
 
         global_utility_over_NCLO[algo] = new_dict
-
-
 
 
 def update_global_util_for_all_NCLOs():
@@ -256,13 +257,13 @@ if __name__ == '__main__':
                         runInformation = initiate_df()
                         for algorithm in algorithm_type:
                             for version in algorithm_version:
-                                algorithm = algorithm.split('_')[0] + '_' + str(version)
-                                initiate_data_frames_fo_algorithm()
                                 for bid in bid_type:
+                                    algorithm = algorithm.split('_')[0] + '_' + str(version) + '_' + str(bid)
+                                    initiate_data_frames_fo_algorithm()
                                     if dbug:
                                         print("Running simulation. \n %s SPs, %s SRs problem type: "
-                                              "%s \n algorithm %s version %s bid type: %s"
-                                              % (SP, SR, p_type, algorithm, version, bid))
+                                              "%s \n algorithm %s bid type: %s"
+                                              % (SP, SR, p_type, algorithm, bid))
                                     problems = create_problems_simulation()
                                     solve_problems(in_problems=problems)
                             to_excel()

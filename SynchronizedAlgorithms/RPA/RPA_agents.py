@@ -38,19 +38,52 @@ class RpaSR(SR):
         self.update_unfeasible_offers_unallocated()
         self.allocate_offers()
         self.update_utilities()
+        self.reset_offers_received_by_skill()
 
     def allocate_offers(self):
         skills_needed_temp = copy.deepcopy(self.skills_needed)
 
-        self.allocated_offers, self.NCLO = self.simulation_entity.allocated_offers(skills_needed_temp,
-                                                                        self.offers_received_by_skill)
-        self.reset_offers_received_by_skill()
+        self.allocated_offers, self.NCLO = \
+            self.simulation_entity.allocated_offers(skills_needed_temp, copy.deepcopy(self.offers_received_by_skill),
+                                                    allocation_version=self.algorithm_version)
+
 
     def update_utilities(self):
         for skill in self.allocated_offers:
             for offer in self.allocated_offers[skill]:
-                offer.utility = self.simulation_entity.calc_bid_to_offer(skill, offer, self.bid_type)
+                if self.bid_type == 1:
+                    offer.utility = self.simulation_entity.calc_converge_bid_to_offer(skill, offer)
+                elif self.bid_type == 2:
+                    skills_needed_temp = copy.deepcopy(self.skills_needed)
+                    offer.utility = self.calc_shapley_value_bid(offer=offer)
+                elif self.bid_type == 3:
+                    offer.utility = self.calc_simple_bid(offer=offer)
                 self.offers_to_send.append(offer)
+
+
+    def calc_shapley_value_bid(self, offer):
+        offer_receive_by_skills = copy.deepcopy(self.offers_received_by_skill)
+        bid = 0
+        if offer.amount == 0: return bid
+        utility_all_offers = self.simulation_entity.final_utility(self.allocated_offers)
+        offer_receive_by_skills_without_sp = {skill: [copy.deepcopy(o) for o in all_offers if o != offer]
+                                              for skill, all_offers in offer_receive_by_skills.items()}
+        offers_without_sp, _ = self.simulation_entity.allocated_offers(copy.deepcopy(self.skills_needed), offer_receive_by_skills_without_sp)
+        utility_without_sp = self.simulation_entity.final_utility(offers_without_sp)
+        bid = utility_all_offers - utility_without_sp
+        return round(max(0, bid), 2)
+
+    def calc_simple_bid(self, offer):
+        offer_receive_by_skills = copy.deepcopy(self.offers_received_by_skill)
+        bid = 0
+        only_the_sps_offer = {skill: [copy.deepcopy(o) for o in all_offers if o.provider == offer.provider]
+                                              for skill, all_offers in offer_receive_by_skills.items()}
+        only_sp_allocated_offers, _ = self.simulation_entity.allocated_offers(copy.deepcopy(self.skills_needed),
+                                                                       only_the_sps_offer)
+        utility_simple = self.simulation_entity.final_utility(only_sp_allocated_offers)
+        bid = utility_simple
+        return round(max(0, bid), 2)
+
 
     def update_unfeasible_offers_unallocated(self):
         unallocated = []
@@ -128,24 +161,39 @@ class RpaSP(SP):
     # 3 - algorithm compute (single agent response to iteration)
     def compute(self):
         self.response_offers = []
-        self.current_xi = {}
         self.accept_offers()
         self.offers_received = []
 
     def accept_offers(self):
+        if self.algorithm_version == (0 or 1 or 2):
+            self.current_xi = {}
+            if self.algorithm_version == 0: # orderd by bid
+                # sort offers by bid (inner sort by arrival time)
+                self.offers_received = list(
+                    sorted(self.offers_received, key=lambda offer: (offer.utility, -offer.arrival_time),
+                           reverse=True))
+            elif self.algorithm_version == 1:  # first offer by simulated annealing
+                self.ordered_offers_by_sa()
+            elif self.algorithm_version == 2:  # ordered offers by dumping
+                self.update_offers_bid_by_dumping()
+                self.ordered_offers_by_sa()
+            self.NCLO, self.current_xi, self.response_offers = self.simulation_entity.accept_offers(
+                self.offers_received)
 
-        if self.algorithm_version == 0: # orderd by bid
-            # sort offers by bid (inner sort by arrival time)
+        elif self.algorithm_version == 3:  # incremental
             self.offers_received = list(
                 sorted(self.offers_received, key=lambda offer: (offer.utility, -offer.arrival_time),
                        reverse=True))
-        if self.algorithm_version == 1:  # first offer by simulated annealing
-            self.ordered_offers_by_sa()
-        if self.algorithm_version == 2:  # ordered offers by dumping
-            self.update_offers_bid_by_dumping()
-            self.ordered_offers_by_sa()
+            self.NCLO, self.current_xi, self.response_offers = self.simulation_entity.accept_incremental_offer\
+                (self.offers_received, self.current_xi)
+        elif self.algorithm_version == (4 or 5):
+            self.offers_received = list(
+                sorted(self.offers_received, key=lambda offer: (offer.utility, -offer.arrival_time),
+                       reverse=True))
+            self.NCLO, self.current_xi, self.response_offers = self.simulation_entity.accept_full_schedule_offer\
+                (self.offers_received)
 
-        self.NCLO, self.current_xi, self.response_offers = self.simulation_entity.accept_offers(self.offers_received)
+
         if dbug:
             self.print_response_offers()
             self.print_current_xi()
@@ -162,13 +210,11 @@ class RpaSP(SP):
         offer_to_receive = self.random_num.choice(self.offers_received)
         # calc acceptation probability by SA
         delta_bid = self.offers_received[0].utility - offer_to_receive.utility
-        self.temperature *= 0.8
+        self.temperature *= 0.2
         probability = 2.71828 ** (-delta_bid / float(self.temperature))
         if self.random_num.random() < probability:
             self.offers_received.remove(offer_to_receive)
             self.offers_received.insert(0, offer_to_receive)
-
-
 
     def update_offers_bid_by_dumping(self):
         for offer in self.offers_received:
@@ -177,8 +223,6 @@ class RpaSP(SP):
             else:
                 offer.utility = round(self.alfa * offer.utility + \
                                 (1 - self.alfa) * self.dumping_bids[offer.requester][offer.skill],2)
-
-
 
     # 4 - after computation broadcast information to neighbors
     def send_msgs(self):
@@ -203,7 +247,7 @@ class RpaSP(SP):
     def print_response_offers(self):
         print("offers from SP: "+str(self._id))
         for offer in self.response_offers:
-            print("sp: %s, sr: %s skill: %s, bid: %s, arrival_time: %s, munber of missions: %s"
+            print("sp: %s, sr: %s skill: %s, bid: %s, arrival_time: %s, number of missions: %s"
                   % (offer.provider, offer.requester, offer.skill, offer.utility, offer.arrival_time, len(offer.mission)))
 
     def print_current_xi(self):

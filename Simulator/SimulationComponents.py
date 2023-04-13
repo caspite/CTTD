@@ -207,59 +207,28 @@ class ServiceProvider(Entity, ABC):
         distance_in_time = round(distance / self.speed, 2)
         return distance_in_time
 
+    @abc.abstractmethod
     def accept_offers(self, offers_received, allocation_version=0):
         """
         allocate the offers by the ordered received
         :return: NCLO, current_xi, response_offers
         """
-        next_available_arrival_time = self.last_time_updated
-        next_available_location = copy.deepcopy(self.location)
-        next_available_skills = copy.deepcopy(self.workload)
-        allocate = True
+        raise NotImplemented
 
-        # NCLO
-        NCLO = 0
-        NCLO_offer_counter = 0
-        current_xi = {}
-        response_offers = []
+    @abc.abstractmethod
+    def accept_incremental_offer(self, offers_received, current_xi):
+        """
+        allocate the offers by the ordered received
+        :return: NCLO, current_xi, response_offers
+        """
+        raise NotImplemented
 
-        for offer in offers_received:
-            offer.utility = None
-            travel_time = round(self.travel_time(next_available_location, offer.location), 2)
-
-            # accepting the offer as is (or arriving earlier)
-            if allocate and offer.arrival_time >= next_available_arrival_time + travel_time and \
-                    offer.amount <= next_available_skills[offer.skill] and offer.amount is not 0:
-                current_xi[len(current_xi)] = copy.deepcopy(offer)
-                # NCLO
-                NCLO_offer_counter += 1
-
-                next_available_arrival_time += travel_time
-                leave_time = round(next_available_arrival_time + \
-                                   offer.duration, 2)
-
-                offer.arrival_time = round(next_available_arrival_time, 2)
-                offer.leaving_time = None
-                offer.duration = None
-                offer.missions = []
-                amount_requested = offer.amount
-                offer.amount = next_available_skills[offer.skill]
-
-                next_available_skills[offer.skill] -= amount_requested
-                next_available_arrival_time = leave_time
-                next_available_location = copy.deepcopy(offer.location)
-
-            # cannot allocate as is - send best offer
-            else:
-                offer.arrival_time = round(next_available_arrival_time + travel_time, 2)
-                offer.amount = next_available_skills[offer.skill]
-                offer.leaving_time = None
-
-            response_offers.append(offer)
-
-        # NCLO
-        NCLO += super().number_of_comparisons(NCLO_offer_counter + 1, len(offers_received))
-        return NCLO, current_xi, response_offers
+    def accept_full_schedule_offer(self, offers_received):
+        """
+        allocate the offers by the ordered received
+        :return: NCLO, current_xi, response_offers
+        """
+        raise NotImplemented
 
 
 # basic sr: location, time_max, skills_activities requirement, skills_activities definition
@@ -345,8 +314,9 @@ class ServiceRequester(Entity, ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def calc_bid_to_offer(self, offer, bid_type=1):
+    def calc_converge_bid_to_offer(self, skill, offer):
         """
+        :param skill:
         :return: utility for an offer by bid type
         """
         raise NotImplementedError()
@@ -367,7 +337,7 @@ class ServiceRequester(Entity, ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def allocated_offers(self):
+    def allocated_offers(self, skills_needed_temp, offers_received_by_skill, allocation_version=0):
         """
         methods that allocated the SPs offers
         :return: list of allocated offers to be sent back to the SPs
@@ -516,6 +486,5 @@ def get_skill_amount_dict(offers):
     for offer in offers:
         skill_amount_dict[offer] = [offer.amount]
         offer.amount = 0
-        offer.max_capacity = 0
         offer.leaving_time = offer.arrival_time
     return skill_amount_dict

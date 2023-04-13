@@ -6,7 +6,7 @@ import random
 
 from Simulator.SimulationComponents import Entity
 
-message_debug = True
+message_debug = False
 
 
 # message passing and communication objects

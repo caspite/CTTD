@@ -1,6 +1,7 @@
 from Simulator.CTTD.RPM import RPM
 import copy
 
+dbug = True
 
 class Casualty:
     def __init__(self, init_RPM=12, t_born=0, _id=0, disaster_site_id=0):

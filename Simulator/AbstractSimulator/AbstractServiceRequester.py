@@ -72,9 +72,13 @@ class Requester(ServiceRequester):
         for skill in self.skills:
             self.simulation_times_for_utility[skill] = {}
 
-    def allocated_offers(self, skills_needed_temp, offers_received_by_skill):
+    def allocated_offers(self, skills_needed_temp, offers_received_by_skill, allocation_version=0):
         NCLO = 0
         allocated_offers = {}
+
+        if allocation_version == 3:
+            offers_received_by_skill, skills_needed_temp= self.remove_accepted_offers\
+                (offers_received_by_skill, skills_needed_temp)
 
         for skill in self.skills:
             allocated_offers[skill] = set()
@@ -112,11 +116,21 @@ class Requester(ServiceRequester):
                     del offers_skill_available_dict[offer_stats[0]]
         return allocated_offers, NCLO
 
-    def calc_bid_to_offer(self, skill, offer, bid_type):
+    def remove_accepted_offers(self, offers_received_by_skill, skills_needed_temp):
+        for skill, offers in offers_received_by_skill.items():
+            for offer in offers:
+                if offer.accept:
+                    skills_needed_temp[skill] -= offer.amount
+            offers[:] = [offer for offer in offers if not offer.accept]
+        return offers_received_by_skill, skills_needed_temp
+
+    def calc_converge_bid_to_offer(self, skill, offer):
         rate_of_util_fall = ((- self.max_util[skill] / self.rate_util_fall) / self.max_time)
         util_available = self.max_util[skill] + rate_of_util_fall * offer.arrival_time
         util_received = util_available * (offer.amount / self.skills_requirements[skill])
         return max(round(util_received, 2), 0)
+
+
 
     def final_utility(self, allocated_offers, SP_view=None):
         simulation_times = self.create_simulation_times(allocated_offers, SP_view)

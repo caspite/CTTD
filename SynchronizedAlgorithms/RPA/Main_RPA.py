@@ -10,7 +10,7 @@ class RPA(SynchronizedSolverSOMAOP):
 
         # version & bid
         self.bid_type = bid_type
-        self.version = algorithm_version
+        self.version = algorithm_version # 0 - regular version 1 - SA version 2 -
         self.alfa = alfa
 
         SPs = self.create_SPs(providers)

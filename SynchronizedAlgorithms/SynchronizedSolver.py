@@ -9,8 +9,8 @@ dbug = True
 
 class VariableAssignment:
     def __init__(self, provider=None, requester=None, skill=None, location=None, amount=None, duration=0.0, arrival_time=None, leaving_time=None,
-                 utility=None, mission=None, max_capacity=None, original_object=None):
-        if original_object is not None:
+                 utility=None, mission=None, max_capacity=None, original_object=None, accept=False):
+        if original_object is not None: #todo remove
             self.copy_constructor(original_object)
             return
 
@@ -24,10 +24,12 @@ class VariableAssignment:
         self.leaving_time = leaving_time
         self.utility = utility
         self.max_capacity = max_capacity
+        self.accept = accept  # has offers accept - for incremental version
         if mission is None:
             self.mission = []
         else:
             self.mission = mission
+
 
     def copy_constructor(self, original):
         self.provider = original.provider
@@ -39,8 +41,12 @@ class VariableAssignment:
         self.arrival_time = original.arrival_time
         self.leaving_time = original.leaving_time
         self.utility = original.utility
-        self.mission = original.mission
-        self.max_capacity = original.max_capacity
+        self.mission = copy.deepcopy(original.mission)
+        self.max_capacity = copy.deepcopy(original.max_capacity)
+        self.accept = original.accept
+
+    def accept_offer(self):
+        self.accept = True
 
     def __str__(self):
         return "SP " + str(self.provider) + " SR " + str(self.requester) + " skill " + str(self.skill) + \
@@ -59,8 +65,12 @@ class VariableAssignment:
 
     # for copy.deepcopy()
     def __deepcopy__(self, memodict={}):
-        copy_object = VariableAssignment(self.provider, self.requester, self.skill, self.location, self.amount, self.duration,
-                                         self.arrival_time, self.leaving_time, self.utility)
+
+        copy_object = VariableAssignment(provider=self.provider, requester=self.requester, skill=self.skill,
+                                         location=self.location, amount=self.amount, duration=self.duration,
+                                         arrival_time=self.arrival_time, leaving_time=self.leaving_time,
+                                         utility=self.utility,mission=copy.deepcopy(self.mission),
+                                         max_capacity=copy.deepcopy(self.max_capacity), accept=self.accept)
         return copy_object
 
 

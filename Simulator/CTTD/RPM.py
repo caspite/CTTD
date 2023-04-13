@@ -123,6 +123,10 @@ class RPM:
         rpm = self.get_rpms_by_time(time)[1]
         return self.get_uploading_time(rpm)
 
+    def get_id(self):
+        return self._id
+
+
 
 def triage_by_rpm(rpm):
     if rpm <= 6:

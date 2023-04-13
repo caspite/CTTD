@@ -1,4 +1,5 @@
 import copy
+from functools import reduce
 
 from Simulator.SimulationComponents import *
 import enum
@@ -79,11 +80,7 @@ class MedicalUnit(ServiceProvider):
         return copy.deepcopy(self._max_capacity)
 
     def accept_offers(self, offers_received, allocation_version=0):
-        """
-        allocate the offers by the ordered they received. if times not valid - sent new offer for each skill
-        at the end - reload capacity and sent new message for each skill and DS with new time and full skill
-        :return: NCLO, current_xi, response_offers
-        """
+
         from SynchronizedAlgorithms.SynchronizedSolver import VariableAssignment
         next_available_arrival_time = self.last_time_updated
         next_available_location = copy.deepcopy(self.location)
@@ -123,7 +120,7 @@ class MedicalUnit(ServiceProvider):
                 next_available_arrival_time = leave_time
                 next_available_location = copy.deepcopy(offer.location)
                 capacity -= offer.max_capacity
-                offer.max_capacity = (self._max_capacity[0], copy.copy(offer.max_capacity))
+                offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), copy.copy(offer.max_capacity))
             # cannot allocate as is - send best offer
             else:
                 # if capacity <=0:
@@ -136,9 +133,9 @@ class MedicalUnit(ServiceProvider):
 
                 offer.arrival_time = round(next_available_arrival_time + travel_time, 2)
                 offer.amount = next_available_skills[offer.skill]
-                offer.max_capacity = (self._max_capacity[0], capacity)
+                offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), copy.copy(capacity))
                 offer.leaving_time = None
-                offer.missions = []
+                offer.mission = []
             if offer not in response_offers:
                 response_offers.append(offer)
 
@@ -162,6 +159,126 @@ class MedicalUnit(ServiceProvider):
         # NCLO
         NCLO += super().number_of_comparisons(NCLO_offer_counter + 1, len(offers_received))
         return NCLO, current_xi, response_offers
+
+    def accept_incremental_offer(self, offers_received, current_xi):
+
+        next_available_arrival_time = self.last_time_updated
+        next_available_location = copy.deepcopy(self.location)
+        next_available_skills = {key[0]: value for key, value in self.workload.items()}
+        capacity = copy.copy(self._max_capacity[1])
+
+
+        # NCLO
+        NCLO = 0
+        NCLO_offer_counter = 0
+        response_offers = []
+
+        if len(offers_received) <= 0:
+            return NCLO, current_xi, response_offers
+
+
+        for offer in current_xi.values():
+            response_offers.append(copy.deepcopy(offer))
+
+        # accept first offer
+        offer = offers_received[0]
+        if offer.utility > 0:
+            offer.accept_offer()
+            current_xi[len(current_xi)] = copy.deepcopy(offer)
+            response_offers.append(offer)
+            offers_received.remove(offer)
+            # for next offers
+            next_available_arrival_time = offer.leaving_time
+            next_available_location = copy.deepcopy(offer.location)
+            next_available_skills = {key[0]: value for key, value in self.workload.items()}
+            for o in current_xi.values():
+                next_available_skills[o.skill] -= o.amount
+            complete_capacity = reduce(lambda x, key: x + current_xi[key].max_capacity, current_xi, 0)
+            capacity = copy.copy(self._max_capacity[1] - complete_capacity)
+
+        NCLO_offer_counter += 1
+        for offer in offers_received:
+            offer.utility = None
+            travel_time = round(self.travel_time(next_available_location, offer.location), 2)
+            NCLO_offer_counter += 1
+            offer.arrival_time = round(next_available_arrival_time + travel_time, 2)
+            offer.leaving_time = None
+            offer.duration = None
+            offer.mission = []
+            offer.amount = next_available_skills[offer.skill]
+            offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), copy.copy(capacity))
+            # cannot allocate as is - send best offer
+            response_offers.append(offer)
+
+        # NCLO
+        NCLO += super().number_of_comparisons(NCLO_offer_counter + 1, len(offers_received))
+        return NCLO, current_xi, response_offers
+
+    def accept_full_schedule_offer(self, offers_received):
+        from SynchronizedAlgorithms.SynchronizedSolver import VariableAssignment
+        next_available_arrival_time = self.last_time_updated
+        next_available_location = copy.deepcopy(self.location)
+        next_available_skills = {key[0]: value for key, value in self.workload.items()}
+        capacity = copy.copy(self._max_capacity[1])
+
+        # NCLO
+        NCLO = 0
+        NCLO_offer_counter = 0
+        current_xi = {}
+        response_offers = []
+
+        for offer in offers_received:
+            offer.utility = None
+            travel_time = round(self.travel_time(next_available_location, offer.location), 2)
+
+            # accepting the offer as is (or arriving earlier)
+            if offer.arrival_time >= next_available_arrival_time + travel_time and \
+                    capacity > 0 and offer.amount is not 0:
+                current_xi[len(current_xi)] = VariableAssignment(original_object=offer)
+                # NCLO
+                NCLO_offer_counter += 1
+
+                next_available_arrival_time += travel_time
+                leave_time = copy.copy(offer.leaving_time)
+
+                offer.arrival_time = round(next_available_arrival_time, 2)
+                offer.leaving_time = None
+                offer.duration = None
+                offer.mission = []
+                amount_requested = offer.amount
+                offer.amount = next_available_skills[offer.skill]
+                next_available_skills[offer.skill] -= amount_requested
+                next_available_arrival_time = leave_time
+                next_available_location = copy.deepcopy(offer.location)
+                capacity -= offer.max_capacity
+                offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), copy.copy(offer.max_capacity))
+            # cannot allocate as is - send best offer
+            else:
+                travel_time = round(self.travel_time(next_available_location, offer.location), 2)
+                capacity_requested = offer.max_capacity
+                offer.arrival_time = round(next_available_arrival_time + travel_time, 2)
+                offer.amount = min(next_available_skills[offer.skill], offer.amount)
+                offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), min(copy.copy(capacity), copy.copy(capacity)))
+                offer.leaving_time = None
+                if len(offer.mission) > 0:
+                    offer.mission = [offer.mission[i] for i in range(0,min(next_available_skills[offer.skill], offer.amount))]
+                    next_available_arrival_time = offer.mission[-1]['leaving_time']
+                    # update times & location & capacity
+                    next_available_skills[offer.skill] -= min(next_available_skills[offer.skill], offer.amount)
+
+                    next_available_location = copy.deepcopy(offer.location)
+                    capacity -= min(copy.copy(capacity), capacity_requested)
+                    current_xi[len(current_xi)] = current_xi[len(current_xi)] = VariableAssignment(original_object=offer)
+                    offer.mission = []
+
+            if offer not in response_offers:
+                response_offers.append(offer)
+
+
+        # NCLO
+        NCLO += super().number_of_comparisons(NCLO_offer_counter + 1, len(offers_received))
+        return NCLO, current_xi, response_offers
+
 
     def get_sr_skill_location(self, offers_received):
         list_of_all = [[offer.requester, offer.skill, offer.location]
