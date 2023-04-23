@@ -160,7 +160,6 @@ class DisasterSite(ServiceRequester, ABC):
 
         # dict {provider: next_available_time}
         # providers_next_time = self.create_provider_next_time(offers_received_by_skill)
-
         for skill in self.skills:
             allocated_offers[skill] = set()
             # all positive offers sorted by arrival time
@@ -208,8 +207,14 @@ class DisasterSite(ServiceRequester, ABC):
                         next_casualty = self.get_next_casualty(copy.deepcopy(casualties_needed_skill), next_time,
                                                                offer_capacity[0],
                                                                initial_triage_time=False)
-                        # if None - delete offer from available
-                        if (next_casualty is None):
+                        from Simulator.CTTD.CttdSimulatorComponents import get_skill_capacity_points
+                        capacity_to_reduce = 0
+                        if next_casualty is not None:
+                            capacity_to_reduce = get_skill_capacity_points(
+                            next_casualty[0].get_triage_by_time(0.0))
+
+                        # if None - delete offer from available or not inof cap
+                        if (next_casualty is None) or (offer_capacity[1] - capacity_to_reduce < 0):
                             del offers_skill_available_dict[offer_stats[0]]
                             offer_stats[0].amount = 0
 
@@ -237,9 +242,7 @@ class DisasterSite(ServiceRequester, ABC):
 
                             # update provider
                             # providers_next_time[offer_stats[0].provider] = leaving_time
-                            from Simulator.CTTD.CttdSimulatorComponents import get_skill_capacity_points
-                            capacity_to_reduce = get_skill_capacity_points(
-                                next_casualty[0].get_triage_by_time(0.0))
+
                             # capacities[offer_stats[0].provider][1] -= capacity_to_reduce
                             offer_stats[0].max_capacity += capacity_to_reduce
                             offer_capacity[1] -= capacity_to_reduce
@@ -254,6 +257,7 @@ class DisasterSite(ServiceRequester, ABC):
 
         update_offers_times(allocated_offers)
         return allocated_offers, NCLO
+
 
     def remove_accepted_offers(self, offers_received_by_skill, casualties_to_allocate):
         for skill, offers in offers_received_by_skill.items():
@@ -280,10 +284,10 @@ class DisasterSite(ServiceRequester, ABC):
                       casualties_by_id if cas.get_id() == i]  # (casualty, last_time_update)
 
         #[(casualty, next_time)]
-        sorted_casualties = sort_casualties_by_threshold(casualties, threshold=0.4)
+        # sorted_casualties = sort_casualties_by_threshold(casualties, threshold=0.4)
         # sorted_casualties = sort_casualties_by_threshold(casualties, arrival_time, threshold=0.4)
-        # sorted_casualties = sorted(casualties, key=lambda x: x[0].get_potential_survival_by_start_time(arrival_time),
-        #                            reverse=True)
+        sorted_casualties = sorted(casualties, key=lambda x: x[0].get_potential_survival_by_start_time(0.0),
+                                   reverse=True)
 
 
         for cas in sorted_casualties:
@@ -391,14 +395,23 @@ class DisasterSite(ServiceRequester, ABC):
 
         bid = 0
         if len(offer.mission) > 0:
-            # minimum_cas = min(offer.mission, key=lambda x:
-            # x['arrival_time'])
 
-            minimum_cas = max(offer.mission, key=lambda x:
-            x['mission'].survival_by_time(0))
 
-            bid = round(minimum_cas['mission'].survival_by_time(
-                minimum_cas['arrival_time']), 2)
+            # minimum_cas = max(offer.mission, key=lambda x:
+            # x['mission'].survival_by_time(x['arrival_time']))
+
+            # bid = round(minimum_cas['mission'].survival_by_time(
+            #     minimum_cas['arrival_time']), 2)
+
+            minimum_cas = min(offer.mission, key=lambda x:
+            x['arrival_time'])
+
+
+            bid = round(minimum_cas['mission'].get_potential_survival_by_start_time(
+                0.0), 2)
+
+
+
         return round(max(0,bid),2)
 
 

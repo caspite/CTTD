@@ -97,6 +97,7 @@ class MedicalUnit(ServiceProvider):
         all_providable_skills = self.get_sr_skill_location(offers_received)
 
 
+
         for offer in offers_received:
             offer.utility = None
             travel_time = round(self.travel_time(next_available_location, offer.location), 2)
@@ -121,7 +122,7 @@ class MedicalUnit(ServiceProvider):
                 next_available_arrival_time = leave_time
                 next_available_location = copy.deepcopy(offer.location)
                 capacity -= offer.max_capacity
-                offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), copy.copy(offer.max_capacity))
+                offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), copy.copy(offer.max_capacity) + capacity)
             # cannot allocate as is - send best offer
             else:
                 # if capacity <=0:
@@ -137,6 +138,7 @@ class MedicalUnit(ServiceProvider):
                 offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), copy.copy(capacity))
                 offer.leaving_time = None
                 offer.mission = []
+                allocate = False
             if offer not in response_offers:
                 response_offers.append(offer)
 

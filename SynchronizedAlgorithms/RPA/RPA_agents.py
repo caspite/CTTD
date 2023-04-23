@@ -120,12 +120,12 @@ class RpaSR(SR):
     def print_response_offers(self):
         print("offers from SR: " + str(self._id))
         for offer in self.offers_to_send:
-            print("sp: %s, sr: %s skill: %s, bid: %s, arrival_time: %s, numer of missions: %s"
-                  % (offer.provider, offer.requester, offer.skill, offer.utility, offer.arrival_time, len(offer.mission)))
+            print(" %s  --> %s: %s | bid %s | A.T %s"
+                  % (offer.requester, offer.provider, offer.skill, offer.utility, offer.arrival_time,))
             for mission in offer.mission:
-                print("arrival time %s, casualty id: %s, survival probability: %s ||" %
-                      (mission['arrival_time'], mission['mission'].get_id(), round(mission['mission'].get_potential_survival_by_start_time(
-                    0.0), 2)))
+                print("ID: %s, Sur: %s ||" %
+                      ( mission['mission'].get_id(), round(mission['mission'].survival_by_time(
+                mission['arrival_time']), 2)))
 
 
 
@@ -210,7 +210,7 @@ class RpaSP(SP):
         offer_to_receive = self.random_num.choice(self.offers_received)
         # calc acceptation probability by SA
         delta_bid = self.offers_received[0].utility - offer_to_receive.utility
-        self.temperature *= 0.2
+        self.temperature *= 0.84
         probability = 2.71828 ** (-delta_bid / float(self.temperature))
         if self.random_num.random() < probability:
             self.offers_received.remove(offer_to_receive)
@@ -245,13 +245,17 @@ class RpaSP(SP):
              % (offer.provider, offer.requester, offer.skill, offer.utility,  offer.arrival_time, len(offer.mission)))
 
     def print_response_offers(self):
-        print("offers from SP: "+str(self._id))
+        print("SP: "+str(self._id))
         for offer in self.response_offers:
-            print("sp: %s, sr: %s skill: %s, bid: %s, arrival_time: %s, number of missions: %s"
-                  % (offer.provider, offer.requester, offer.skill, offer.utility, offer.arrival_time, len(offer.mission)))
+            print("%s --> %s: %s | T.A %s | Amount: %s"
+                  % (offer.provider, offer.requester, offer.skill, offer.arrival_time, offer.amount))
 
     def print_current_xi(self):
         print(f"sp {self._id} current xi:")
         for offer in self.current_xi.values():
-            print("sp: %s, sr: %s skill: %s, bid: %s, munber_of_missions: %s"
-                  % (offer.provider, offer.requester, offer.skill, offer.utility, len(offer.mission)))
+            print("%s --> %s: %s | bid: %s"
+                  % (offer.provider, offer.requester, offer.skill, offer.utility))
+            for mission in offer.mission:
+                print("\nID: %s, Sur: %s ||" %
+                      (mission['mission'].get_id(), round(mission['mission'].survival_by_time(
+                          mission['arrival_time']), 2)))
