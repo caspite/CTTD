@@ -40,6 +40,8 @@ class RPA(SynchronizedSolverSOMAOP):
             self.agents_receive_msgs()
 
             self.record_data()
+            if self.version == 5 and iteration == 0:
+                break
 
     def providers_react_to_msgs(self, iteration):
         for provider in self.all_providers:

@@ -165,7 +165,7 @@ class RpaSP(SP):
         self.offers_received = []
 
     def accept_offers(self):
-        if self.algorithm_version == (0 or 1 or 2):
+        if self.algorithm_version == 0 or self.algorithm_version == 1 or self.algorithm_version == 2:
             self.current_xi = {}
             if self.algorithm_version == 0: # orderd by bid
                 # sort offers by bid (inner sort by arrival time)
@@ -186,7 +186,7 @@ class RpaSP(SP):
                        reverse=True))
             self.NCLO, self.current_xi, self.response_offers = self.simulation_entity.accept_incremental_offer\
                 (self.offers_received, self.current_xi)
-        elif self.algorithm_version == (4 or 5):
+        elif self.algorithm_version == 4 or self.algorithm_version == 5:
             self.offers_received = list(
                 sorted(self.offers_received, key=lambda offer: (offer.utility, -offer.arrival_time),
                        reverse=True))

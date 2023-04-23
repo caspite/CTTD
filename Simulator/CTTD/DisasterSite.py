@@ -12,7 +12,7 @@ from Simulator.SimulationComponents import ServiceRequester, get_skill_amount_di
 from Simulator.CTTD.MedicalUnit import *
 from collections import Counter
 
-dbug = False
+dbug = True
 
 
 def update_offers_times(allocated_offers):
@@ -57,12 +57,6 @@ def sort_casualties_by_threshold(casualties, time_arrival=None, threshold=0.4):
         below_threshold = [x for x in casualties if x[0].survival_by_time(max(x[1], time_arrival)) <= threshold]
         below_threshold.sort(key=lambda x: x[0].survival_by_time(max(x[1], time_arrival))) #, reverse=True
         above_threshold.sort(key=lambda x: x[0].survival_by_time(max(x[1], time_arrival)))
-    if dbug:
-        above_threshold_survival = [str(a[0].survival_by_time(max(a[1], time_arrival))) for a in above_threshold]
-        below_threshold_survival = [str(a[0].survival_by_time(max(a[1], time_arrival))) for a in below_threshold]
-
-        print("above_threshold: " + ", ".join(above_threshold_survival))
-        print("below_threshold: " + ", ".join(below_threshold_survival))
     return above_threshold + below_threshold
 
 
@@ -189,7 +183,7 @@ class DisasterSite(ServiceRequester, ABC):
                                        value[0][0] == skill]
 
             # while more casualties to allocate and offers available
-            while offers_skill_available_dict and len(casualties_needed_skill) > 0:
+            while offers_skill_available_dict:
 
                 # order offers by next skill unit work start
                 offers_skill_available_dict = dict(sorted(offers_skill_available_dict.items(),
@@ -202,10 +196,10 @@ class DisasterSite(ServiceRequester, ABC):
                 offer_stats[0].max_capacity = 0
 
                 # while provider have more skills to offer
-                while offers_skill_available_dict.keys().__contains__(offer_stats[0]):
+                while offers_skill_available_dict.keys().__contains__(offer_stats[0])  and len(casualties_needed_skill) > 0:
                     next_casualty = None
 
-                    if offer_capacity[1] > 0:
+                    if offer_capacity[1] > 0 and offer_stats[1][0] > 0:
                         # get next casualty - by t.a, next skill. and  agent capabilities
                         next_time = offer_stats[0].arrival_time
                         if len(offer_stats[0].mission) > 0:
@@ -249,12 +243,15 @@ class DisasterSite(ServiceRequester, ABC):
                             # capacities[offer_stats[0].provider][1] -= capacity_to_reduce
                             offer_stats[0].max_capacity += capacity_to_reduce
                             offer_capacity[1] -= capacity_to_reduce
-                    elif offer_capacity[1] <= 0:
+                    elif offer_capacity[1] <= 0 or offer_stats[1][0] <= 0:
                         del offers_skill_available_dict[offer_stats[0]]
                         offer_stats[0].amount = 0
 
-                    if offer_stats[0] not in allocated_offers[skill]:
-                        allocated_offers[skill].add(offer_stats[0])
+                if offer_stats[0] not in allocated_offers[skill]:
+                    allocated_offers[skill].add(offer_stats[0])
+                    if offers_skill_available_dict.__contains__(offer_stats[0]):
+                        del offers_skill_available_dict[offer_stats[0]]
+
         update_offers_times(allocated_offers)
         return allocated_offers, NCLO
 
@@ -272,7 +269,6 @@ class DisasterSite(ServiceRequester, ABC):
 
     def get_next_casualty(self, casualties_by_id, arrival_time, agent_capabilities, initial_triage_time=True):
         """
-
         :param casualties_by_id:  [(cas_id,last_update_time)]
         :param arrival_time: the time that the SP arrived to the disaster site
         :param agent_capabilities: {triage: max_workload}
@@ -288,10 +284,7 @@ class DisasterSite(ServiceRequester, ABC):
         # sorted_casualties = sort_casualties_by_threshold(casualties, arrival_time, threshold=0.4)
         # sorted_casualties = sorted(casualties, key=lambda x: x[0].get_potential_survival_by_start_time(arrival_time),
         #                            reverse=True)
-        if dbug:
-            for cas, _ in sorted_casualties:
-                print("cas id: %s, RPM: %s , survival potential: %s" % (
-                    cas.get_id(), cas.current_RPM.get_id(), cas.get_potential_survival_by_start_time(0.0)))
+
 
         for cas in sorted_casualties:
             triage = None
@@ -349,6 +342,11 @@ class DisasterSite(ServiceRequester, ABC):
         elif utility_version == 1:
             count = sum(1 for value in casualties_survival_dict.values if random.random() < value)
 
+        if dbug:
+            for cas, survival in casualties_survival_dict.items():
+                print("cas id" + str(cas.get_id()) + " survival: " + str(survival))
+
+
         final_utility -= count
         return final_utility
 
@@ -393,8 +391,12 @@ class DisasterSite(ServiceRequester, ABC):
 
         bid = 0
         if len(offer.mission) > 0:
-            minimum_cas = min(offer.mission, key=lambda x:
-            x['arrival_time'])
+            # minimum_cas = min(offer.mission, key=lambda x:
+            # x['arrival_time'])
+
+            minimum_cas = max(offer.mission, key=lambda x:
+            x['mission'].survival_by_time(0))
+
             bid = round(minimum_cas['mission'].survival_by_time(
                 minimum_cas['arrival_time']), 2)
         return round(max(0,bid),2)

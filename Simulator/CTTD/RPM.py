@@ -1,3 +1,4 @@
+import copy
 from enum import Enum
 import math
 
@@ -94,7 +95,7 @@ class RPM:
             if quotient > 12:
                 print('here is my bug')
             if quotient == 0:
-                return deterioration[relative_rpm][int(quotient)], deterioration[relative_rpm][int(quotient)]
+                return copy.copy(relative_rpm), copy.copy(relative_rpm)
             return deterioration[relative_rpm][int(quotient-1)], deterioration[relative_rpm][int(quotient)]
 
     def get_rpm_by_time(self, time):

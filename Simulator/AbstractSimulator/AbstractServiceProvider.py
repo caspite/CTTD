@@ -153,15 +153,21 @@ class Provider(ServiceProvider):
 
             # cannot allocate as is - send best offer
             else:
-                offer.arrival_time = round(next_available_arrival_time + travel_time, 2)
+
                 amount_requested =  offer.amount
                 offer.amount = min(next_available_skills[offer.skill], amount_requested)
-                current_xi[len(current_xi)] = copy.deepcopy(offer)
-                offer.leaving_time = None
-                next_available_skills[offer.skill] -= min(next_available_skills[offer.skill], amount_requested)
-                next_available_arrival_time = offer.leave_time
-                next_available_location = copy.deepcopy(offer.location)
 
+                next_available_skills[offer.skill] -= min(next_available_skills[offer.skill], amount_requested)
+                if amount_requested > 0:
+                    offer.duration =round(((offer.leaving_time - offer.arrival_time)/ amount_requested)*offer.amount,2)
+
+                next_available_location = copy.deepcopy(offer.location)
+                offer.arrival_time = round(next_available_arrival_time + travel_time, 2)
+                offer.leaving_time = offer.arrival_time + offer.duration
+                next_available_arrival_time = offer.leaving_time
+                if offer.amount>0:
+                    current_xi[len(current_xi)] = copy.deepcopy(offer)
+                offer.leaving_time = None
 
 
             response_offers.append(offer)

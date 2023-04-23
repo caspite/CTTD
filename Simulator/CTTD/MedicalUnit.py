@@ -1,4 +1,5 @@
 import copy
+import functools
 from functools import reduce
 
 from Simulator.SimulationComponents import *
@@ -234,7 +235,7 @@ class MedicalUnit(ServiceProvider):
             # accepting the offer as is (or arriving earlier)
             if offer.arrival_time >= next_available_arrival_time + travel_time and \
                     capacity > 0 and offer.amount is not 0:
-                current_xi[len(current_xi)] = VariableAssignment(original_object=offer)
+                current_xi[len(current_xi)] = VariableAssignment(original_object=offer) # todo - deepcopy
                 # NCLO
                 NCLO_offer_counter += 1
 
@@ -251,24 +252,32 @@ class MedicalUnit(ServiceProvider):
                 next_available_arrival_time = leave_time
                 next_available_location = copy.deepcopy(offer.location)
                 capacity -= offer.max_capacity
-                offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), copy.copy(offer.max_capacity))
+                offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), capacity+copy.copy(offer.max_capacity))
             # cannot allocate as is - send best offer
             else:
                 travel_time = round(self.travel_time(next_available_location, offer.location), 2)
                 capacity_requested = offer.max_capacity
                 offer.arrival_time = round(next_available_arrival_time + travel_time, 2)
+                if offer.amount == 0: offer.amount = next_available_skills[offer.skill]
                 offer.amount = min(next_available_skills[offer.skill], offer.amount)
-                offer.max_capacity = (copy.deepcopy(self._max_capacity[0]), min(copy.copy(capacity), copy.copy(capacity)))
+                offer.max_capacity = (copy.deepcopy(self._max_capacity[0]),
+                                      capacity)
                 offer.leaving_time = None
-                if len(offer.mission) > 0:
-                    offer.mission = [offer.mission[i] for i in range(0,min(next_available_skills[offer.skill], offer.amount))]
-                    next_available_arrival_time = offer.mission[-1]['leaving_time']
+                if len(offer.mission) > 0 and capacity > 0:
+                    offer.mission = [offer.mission[i] for i in range(0,min(next_available_skills[offer.skill], len(offer.mission)))]
+                    next_available_arrival_time =offer.arrival_time + functools.reduce\
+                        (lambda acc, x: acc+ x['duration'], offer.mission, 0)
+                    offer.leaving_time = next_available_arrival_time
                     # update times & location & capacity
-                    next_available_skills[offer.skill] -= min(next_available_skills[offer.skill], offer.amount)
+                    next_available_skills[offer.skill] -= len(offer.mission)
 
                     next_available_location = copy.deepcopy(offer.location)
-                    capacity -= min(copy.copy(capacity), capacity_requested)
-                    current_xi[len(current_xi)] = current_xi[len(current_xi)] = VariableAssignment(original_object=offer)
+
+                    from Simulator.CTTD.CttdSimulatorComponents import get_skill_capacity_points
+                    capacity_to_reduce = functools.reduce(lambda acc, x: acc + get_skill_capacity_points(
+                       x['mission'].get_triage_by_time(0.0)), offer.mission, 0)
+                    capacity -= capacity_to_reduce
+                    current_xi[len(current_xi)] = copy.deepcopy(offer)
                     offer.mission = []
 
             if offer not in response_offers:
