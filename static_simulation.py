@@ -3,6 +3,7 @@ import math
 import os
 import openpyxl as openpyxl
 import pandas as pd
+import matplotlib.pyplot as plt
 from Simulator.AbstractSimulator.AbstractSimulatorComponents import AbstractSimulatorCreator
 from Simulator.CTTD.CttdSimulatorComponents import CttdSimulatorComponents
 from Solver.SolverAbstract import Mailer, Agent
@@ -10,14 +11,14 @@ from SynchronizedAlgorithms.RPA.Main_RPA import RPA
 
 dbug = True
 alfa = 0.7  # RPA dumping prop
-SR_amount = [5, 10, 20]  # [5, 10, 20]
-SP_amount = [5,10,15,20,25,30,35,40]  # [5,10,15,20,25,30,35,40]
-problems_amount = 10
+SR_amount = [5] # [5, 10, 20]
+SP_amount = [10]  # [5,10,15,20,25,30,35,40]
+problems_amount = 15
 algorithm_type = ["RPA"]  # 1 - RPA, 2 - DSRM / none
 solver_type = ["SOMAOP"]  # 1-SOMAOP 2-DCOP
-simulation_type = ["Abstract", "CTTD"]  # "Abstract", "CTTD"
-algorithm_version = [0, 1, 3, 4, 5] # [0, 1, 2, 3, 4, 5] 0: regular version,  4: full schedule, 5: full schedule one shote 2 - dumping not in use
-bid_type = [1]  # 1 - coverage bid, 2 - shapley, 3- contribution
+simulation_type = ["CTTD"]  # "Abstract", "CTTD"
+algorithm_version = [0, 1, 3, 4, 5] # [0, 1, 2, 3, 4, 5] 0: regular version, 1: SA, 3: incremental  4: full schedule, 5: full schedule one shote 2 - dumping not in use
+bid_type = [1, 2, 3]  # [1, 2, 3] 1 - coverage bid, 2 - shapley, 3- contribution
 termination = 250  # termination for RPA
 
 # for DCOP privacy coherency
@@ -84,6 +85,21 @@ def to_excel():
     globalUtilityOverNCLODF.to_excel(writer, sheet_name=sheet_global_utility, startcol=1, index=False)
 
     writer.save()
+
+
+
+def  plot_chart():
+    string_name = str("Utility_%s_problems_%s_SPs_%s_SRs_%s_simulator" % (problems_amount, SP, SR, simulation))
+    for algo in global_utility_over_NCLO:
+        x = sorted(global_utility_over_NCLO[algo].keys())
+        y=[global_utility_over_NCLO[algo].get(i,None) for i in x]
+        plt.plot(x, y, label=algo)
+
+    plt.xlabel('NCLO')
+    plt.ylabel('Utility')
+    plt.title(string_name)  # Add a header to the chart
+    plt.legend()
+    plt.show()
 
 
 # init data frame for output
@@ -267,3 +283,4 @@ if __name__ == '__main__':
                                     problems = create_problems_simulation()
                                     solve_problems(in_problems=problems)
                             to_excel()
+                            plot_chart()

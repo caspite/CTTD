@@ -30,10 +30,11 @@ def update_offers_times(allocated_offers):
 
 
 def dict_minimum_amount(skills_dict, casualties_dict):
-    cas_skills = {}
-    for skill in skills_dict.keys():
-        count = sum(1 for value in casualties_dict.values() for tup in value[0] if skill in tup)
-        cas_skills[skill] = count
+    cas_skills = {skill: 0 for skill in skills_dict.keys()}
+    for cas in casualties_dict.values():
+        for skill in skills_dict.keys():
+            if skill in skills_dict:
+                cas_skills[skill] += 1
     skills_dict_minimum = {key: min(skills_dict[key], cas_skills[key]) for key in
                            skills_dict.keys() & cas_skills.keys()}
     return skills_dict_minimum
@@ -60,9 +61,7 @@ def sort_casualties_by_threshold(casualties, time_arrival=None, threshold=0.4):
     return above_threshold + below_threshold
 
 
-def sort_casualties_by_potential_survival(casualties, time_arrival):
-    casualties.sort(key=lambda x: x[0].get_potential_survival_by_start_time(max(x[1], time_arrival)))
-    return casualties
+
 
 
 def create_schedule_for_casualties(casualties_needed_activities_temp, schedules):
@@ -129,7 +128,6 @@ class DisasterSite(ServiceRequester, ABC):
 
     # 1- allocate offers to SPs
     def allocated_offers(self, skills_needed, offers_received_by_skill, allocation_version=0):
-
         """
         method that used by solver agents -
         :param allocation_version:
@@ -139,28 +137,21 @@ class DisasterSite(ServiceRequester, ABC):
         :type {skill: (variableAssignment)}
         :return: {skill: set(variableAssignment)} , NCLO (int)
         """
-
         NCLO = 1
         allocated_offers = {}
         # sort skills_activities by activity
         from Simulator.CTTD.CttdSimulatorComponents import cmp_skills
-        skills_needed = {k: skills_needed[k] for k in sorted(skills_needed, key=cmp_to_key(cmp_skills))}
+        skills_needed = {k: skills_needed[k] for k in sorted(skills_needed.keys(), key=cmp_to_key(cmp_skills))}
         # activities to allocate {casualty_id: [deque, last time]}
         casualties_to_allocate = copy.deepcopy(self.casualties_needed_activities)
         casualties_to_allocate = {key: [value, 0.0] for key, value in casualties_to_allocate.items()}
+        casualties_to_allocate = self.sort_casualties_by_potential_survival(casualties_to_allocate)
         if allocation_version == 3:
             offers_received_by_skill, casualties_to_allocate = self.remove_accepted_offers(offers_received_by_skill, casualties_to_allocate)
         # skill needed - minimum between casualties skills_activities and sent skill needed
         skills_needed = dict_minimum_amount(skills_needed, casualties_to_allocate)
-
-        # # dict of provider with capacity {provider_id: double (0-1)}
-        # capacities = {offer.provider: list(copy.deepcopy(offer.max_capacity))
-        #               for offer_list in offers_received_by_skill.values()
-        #               for offer in offer_list if offer.utility is not 0}
-
-        # dict {provider: next_available_time}
-        # providers_next_time = self.create_provider_next_time(offers_received_by_skill)
-        for skill in self.skills:
+        skills  = [k for k in self.skills if k in skills_needed]
+        for skill in skills:
             allocated_offers[skill] = set()
             # all positive offers sorted by arrival time
             skill_offers_by_arrival = [offer for offer in offers_received_by_skill[skill] if
@@ -171,7 +162,7 @@ class DisasterSite(ServiceRequester, ABC):
             NCLO += super().number_of_comparisons(q, len(skill_offers_by_arrival))
 
             # copy all offers, reset and insert to dict
-            offers_to_allocate = copy.copy(skill_offers_by_arrival[:])
+            offers_to_allocate = copy.copy(skill_offers_by_arrival[0:skills_needed[skill]])
             offers_skill_available_dict = get_skill_amount_dict(offers_to_allocate)  # {offer: [amount]}
 
             # all casualties that need this skill next [(casualty_id, last_time)]
@@ -204,9 +195,8 @@ class DisasterSite(ServiceRequester, ABC):
                         if len(offer_stats[0].mission) > 0:
                             next_time = offer_stats[0].mission[-1]['leaving_time']
 
-                        next_casualty = self.get_next_casualty(copy.deepcopy(casualties_needed_skill), next_time,
-                                                               offer_capacity[0],
-                                                               initial_triage_time=False)
+                        next_casualty = self.next_casualty(copy.deepcopy(casualties_to_allocate), skill, next_time,
+                                                               offer_capacity[0])
                         from Simulator.CTTD.CttdSimulatorComponents import get_skill_capacity_points
                         capacity_to_reduce = 0
                         if next_casualty is not None:
@@ -228,7 +218,6 @@ class DisasterSite(ServiceRequester, ABC):
                             # allocate- update amount, mission, and calc time
                             offer_stats[0].amount += 1
                             offer_stats[1][0] -= 1
-                            skills_needed[skill] -= 1
 
                             # remove from needed
                             casualty_tuple_to_remove = next(
@@ -258,7 +247,14 @@ class DisasterSite(ServiceRequester, ABC):
         update_offers_times(allocated_offers)
         return allocated_offers, NCLO
 
+    def sort_casualties_by_potential_survival(self, casualties_by_id):
+        casualties = {cas: casualties_by_id[cas.get_id()] for cas in self.casualties for i in
+                      casualties_by_id.keys() if cas.get_id() == i}  # (casualty, last_time_update)
 
+        sorted_casualties = dict(sorted(casualties.items(), key=lambda x: x[0].get_potential_survival_by_start_time(0.0),
+                                        reverse=True))
+        sorted_casualties = {cas.get_id(): value for cas, value in sorted_casualties.items()}
+        return sorted_casualties
     def remove_accepted_offers(self, offers_received_by_skill, casualties_to_allocate):
         for skill, offers in offers_received_by_skill.items():
             for offer in offers:
@@ -289,7 +285,6 @@ class DisasterSite(ServiceRequester, ABC):
         sorted_casualties = sorted(casualties, key=lambda x: x[0].get_potential_survival_by_start_time(0.0),
                                    reverse=True)
 
-
         for cas in sorted_casualties:
             triage = None
             if initial_triage_time:
@@ -302,6 +297,18 @@ class DisasterSite(ServiceRequester, ABC):
                 workload = agent_capabilities[triage]
             if workload > 0:
                 return cas
+        return None
+
+    def next_casualty(self, casualties_by_id, skill, arrival_time, agent_capabilities):
+
+        for cas, value in casualties_by_id.items():
+            casualty = self.get_casualty_by_id(cas)
+            triage = casualty.get_triage()
+            workload = 0
+            if triage in agent_capabilities.keys() and value[0][0] == skill:
+                workload = agent_capabilities[triage]
+            if workload > 0:
+                return [casualty,max(arrival_time, value[1])]
         return None
 
     @staticmethod
@@ -322,12 +329,13 @@ class DisasterSite(ServiceRequester, ABC):
         return next((casualty for casualty in self.casualties if casualty.get_id() == cas_id), None)
 
     # 2 - calculate final utility by current scheduled SPs view
-    def final_utility(self, allocated_offers, SP_view=None, utility_version=0):
+    def final_utility(self, allocated_offers, SP_view=None, utility_version=0, cost=True):
         """
 
         :param allocated_offers:
         :param SP_view:
         :param utility_version: the utility version - if 0 - above 0.4, 1 - sampling from uniform distribution
+        cost: if true - calculate the cost of the final
         :return:
         """
         final_utility = len(self.casualties)
@@ -346,13 +354,16 @@ class DisasterSite(ServiceRequester, ABC):
         elif utility_version == 1:
             count = sum(1 for value in casualties_survival_dict.values if random.random() < value)
 
-        if dbug:
-            for cas, survival in casualties_survival_dict.items():
-                print("cas id" + str(cas.get_id()) + " survival: " + str(survival))
+        # if dbug:
+        #     for cas, survival in casualties_survival_dict.items():
+        #         print("cas id" + str(cas.get_id()) + " survival: " + str(survival))
 
 
         final_utility -= count
-        return final_utility
+        if cost:
+            return final_utility
+        else:
+            return count
 
     def create_survival_dict_by_schedule(self, casualties_schedule):
         """

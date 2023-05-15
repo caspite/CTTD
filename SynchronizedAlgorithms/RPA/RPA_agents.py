@@ -76,11 +76,15 @@ class RpaSR(SR):
     def calc_simple_bid(self, offer):
         offer_receive_by_skills = copy.deepcopy(self.offers_received_by_skill)
         bid = 0
-        only_the_sps_offer = {skill: [copy.deepcopy(o) for o in all_offers if o.provider == offer.provider]
+        only_the_sp_offer = {skill: [copy.deepcopy(o) for o in all_offers if o.provider == offer.provider and o.skill == offer.skill]
                                               for skill, all_offers in offer_receive_by_skills.items()}
-        only_sp_allocated_offers, _ = self.simulation_entity.allocated_offers(copy.deepcopy(self.skills_needed),
-                                                                       only_the_sps_offer)
-        utility_simple = self.simulation_entity.final_utility(only_sp_allocated_offers)
+        only_the_sp_offer = {k:v for k,v in only_the_sp_offer.items() if v}
+
+        skills_needed_temp = {offer.skill:self.skills_needed[offer.skill]}
+
+        only_sp_allocated_offers, _ = self.simulation_entity.allocated_offers(skills_needed_temp,
+                                                                       only_the_sp_offer)
+        utility_simple = self.simulation_entity.final_utility(only_sp_allocated_offers,cost=False)
         bid = utility_simple
         return round(max(0, bid), 2)
 
@@ -120,8 +124,8 @@ class RpaSR(SR):
     def print_response_offers(self):
         print("offers from SR: " + str(self._id))
         for offer in self.offers_to_send:
-            print(" %s  --> %s: %s | bid %s | A.T %s"
-                  % (offer.requester, offer.provider, offer.skill, offer.utility, offer.arrival_time,))
+            print(" %s  --> %s: %s | bid %s | A.T %s | amount %s"
+                  % (offer.requester, offer.provider, offer.skill, offer.utility, offer.arrival_time, offer.amount))
             for mission in offer.mission:
                 print("ID: %s, Sur: %s ||" %
                       ( mission['mission'].get_id(), round(mission['mission'].survival_by_time(
