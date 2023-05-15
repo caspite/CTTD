@@ -8,7 +8,7 @@ from Simulator.AbstractSimulator.AbstractSimulatorComponents import AbstractSimu
 from Simulator.CTTD.CttdSimulatorComponents import CttdSimulatorComponents
 from Solver.SolverAbstract import Mailer, Agent
 from SynchronizedAlgorithms.RPA.Main_RPA import RPA
-
+#only for git checking
 dbug = True
 alfa = 0.7  # RPA dumping prop
 SR_amount = [5] # [5, 10, 20]
