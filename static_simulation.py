@@ -234,6 +234,16 @@ def update_global_util_for_all_NCLOs_new_ver():
 
         global_utility_over_NCLO[algo] = new_dict
 
+def update_final_utility_over_agents_amount():
+    '''
+    this method update the final utility for each problem size
+    '''
+    
+    last_utility = global_utility_over_NCLO.get(algorithm)[-1] #the last utility
+    problem_size = ('SR%sSP%s' %(SR_amount,SP_amount))
+    final_utility_over_agents_amount[problem_size] = last_utility
+
+
 
 def update_global_util_for_all_NCLOs():
     for algo in global_utility_over_NCLO:
@@ -264,6 +274,7 @@ def update_global_util_for_all_NCLOs():
 if __name__ == '__main__':
     for simulation in simulation_type:
         for SR in SR_amount:
+            final_utility_over_agents_amount = {} # {problems size: utility}
             for SP in SP_amount:
                 if SP > SR:
                     # output variables
@@ -284,3 +295,5 @@ if __name__ == '__main__':
                                     solve_problems(in_problems=problems)
                             to_excel()
                             plot_chart()
+
+            update_final_utility_over_agents_amount()
