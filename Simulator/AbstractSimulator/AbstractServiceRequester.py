@@ -80,7 +80,7 @@ class Requester(ServiceRequester):
             offers_received_by_skill, skills_needed_temp= self.remove_accepted_offers\
                 (offers_received_by_skill, skills_needed_temp)
 
-        for skill in self.skills:
+        for skill in skills_needed_temp:
             allocated_offers[skill] = set()
             skill_offers_by_arrival = [offer for offer in offers_received_by_skill[skill] if
                                        offer.utility is not 0]
@@ -132,7 +132,7 @@ class Requester(ServiceRequester):
 
 
 
-    def final_utility(self, allocated_offers, SP_view=None):
+    def final_utility(self, allocated_offers, SP_view=None, cost = None):
         simulation_times = self.create_simulation_times(allocated_offers, SP_view)
         all_util = 0
         for skill, amount_needed in self.skills_requirements.items():
