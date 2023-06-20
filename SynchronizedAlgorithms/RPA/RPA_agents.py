@@ -212,10 +212,14 @@ class RpaSP(SP):
         if len(self.offers_received) == 0: return
         # select random offer
         offer_to_receive = self.random_num.choice(self.offers_received)
+
+
         # calc acceptation probability by SA
         delta_bid = self.offers_received[0].utility - offer_to_receive.utility
+        if delta_bid == 0:
+            delta_bid = ((offer_to_receive.arrival_time - self.offers_received[0].arrival_time)/offer_to_receive.arrival_time)
         self.temperature *= 0.84
-        probability = 2.71828 ** (-delta_bid / float(self.temperature))
+        probability = math.exp(-delta_bid / float(self.temperature))
         if self.random_num.random() < probability:
             self.offers_received.remove(offer_to_receive)
             self.offers_received.insert(0, offer_to_receive)
