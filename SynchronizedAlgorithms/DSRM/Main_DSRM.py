@@ -121,7 +121,7 @@ class DSRM(SynchronizedSolverSOMAOP):
                 self.record_data()
 
             self.handle_simulation_end_event()
-
+#this is a check
     #start iteration of the
     def run_gale_shapley(self):
         self.update_all_agent_parameters()  # update skills and locations
