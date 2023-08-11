@@ -348,6 +348,7 @@ class DsrmSR(SR):
                 all_round_neighbor_skills[msg.sender].append(msg.information.skill)
             else:
                 all_round_neighbor_skills[msg.sender] = msg.information.skill
+                #yyess
 
             if msg.sender in self.neighbors: #todo!!
                 joint_skills = dict([skill for skill in msg.information["skills"].items() if skill[0] in self.sim_temp_temp_skills_needed
