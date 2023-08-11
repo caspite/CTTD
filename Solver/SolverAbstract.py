@@ -252,6 +252,7 @@ class Mailer(object):
         self.msg_receivers = {}
 
         self.number_of_messages_sent_total = 0
+        self.current_time = 0.0 # for DSRM
 
     # called from agent to send msg
     def send_msg(self, msg):

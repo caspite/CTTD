@@ -159,6 +159,7 @@ class DSRM(SynchronizedSolverSOMAOP):
 
         for requester in self.all_requesters:
             requester.update_skills_received(self.current_time)
+            requester.update_time_per_skill_unit(self.current_time)
 
     def remove_irrelevant_agents_for_algorithm(self):
         self.SRs = copy.copy(self.all_requesters)

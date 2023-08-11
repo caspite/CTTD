@@ -25,7 +25,7 @@ class RPA(SynchronizedSolverSOMAOP):
         self.percentCompleteOverIteration = {}
         self.number_of_messages_sent_iteration = {}
         self.number_of_messages_sent_total = 0
-        self.number_of_messages_sent = 0
+
 
     def execute_algorithm(self):
         for iteration in range(-1, self.termination):
@@ -56,9 +56,7 @@ class RPA(SynchronizedSolverSOMAOP):
             requester.compute()
             requester.send_msgs()
 
-    def agents_receive_msgs(self):
-        self.number_of_messages_sent += len(self.mailer.msg_box)
-        self.mailer.agents_receive_msgs()
+
 
     def calculate_global_utility(self):
         total_util = 0

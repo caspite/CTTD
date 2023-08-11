@@ -83,6 +83,7 @@ class SynchronizedSolverSOMAOP(object):
         self.mailer = mailer  # the mailer - deliver message only
         self.termination = termination
         self.agents = providers + requesters
+        self.number_of_messages_sent = 0
 
         # NCLO variables
         self.NCLO = 0
@@ -145,6 +146,10 @@ class SynchronizedSolverSOMAOP(object):
             if agent.NCLO > max_NCLO:
                 max_NCLO = agent.NCLO
         return max_NCLO
+
+    def agents_receive_msgs(self):
+        self.number_of_messages_sent += len(self.mailer.msg_box)
+        self.mailer.agents_receive_msgs()
 
     def update_current_NCLO(self):
         self.NCLO += self.find_max_NCLO()

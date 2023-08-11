@@ -14,17 +14,13 @@ class RpaSR(SR):
         if t_now is None: t_now = simulation_entity.last_time_updated
         SR.__init__(self, simulation_entity=simulation_entity, bid_type=bid_type, t_now=t_now, algorithm_version=algo_version)
 
-        self.offers_received_by_skill = {}
-        self.reset_offers_received_by_skill()
         self.allocated_offers = {}
         self.offers_to_send = []
         self.current_utility = 0
 
 
     # 1 - reset fields of algorithm
-    def reset_offers_received_by_skill(self):
-        for skill in self.skills_needed:
-            self.offers_received_by_skill[skill] = []
+
 
     def reset_allocated_offers(self):
         for skill in self.skills_needed:
@@ -73,6 +69,7 @@ class RpaSR(SR):
         bid = utility_all_offers - utility_without_sp
         return round(max(0, bid), 2)
 
+#todo upcasting
     def calc_simple_bid(self, offer):
         offer_receive_by_skills = copy.deepcopy(self.offers_received_by_skill)
         bid = 0

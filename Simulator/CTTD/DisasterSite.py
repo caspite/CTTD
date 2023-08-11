@@ -425,4 +425,16 @@ class DisasterSite(ServiceRequester, ABC):
 
         return round(max(0,bid),2)
 
+    def get_care_time(self,skill,time):
+        ans=0
+        for cas in self.casualties:
+            if ans < cas.get_care_time(skill, time):
+                ans = cas.get_care_time(skill, time)
+        return ans
+
+    def __deepcopy__(self, memodict={}):
+        copy_object = DisasterSite(self.getId(), self.skills, copy.deepcopy(self.casualties),
+                                   self.location, self.last_time_updated, self.skill_weights)
+        copy_object.near_hospital = copy.deepcopy(self.near_hospital)
+        return copy_object
 

@@ -96,7 +96,7 @@ class CttdSimulatorComponents(Simulation):
     @staticmethod
     def create_single_requester(id_, casualties):
         return DisasterSite(id_=id_, skills=list(skills_activities.keys()),
-                            casualties=casualties, skills_weights=skills_weights)
+                            casualties=copy.deepcopy(casualties), skills_weights=skills_weights)
 
     @staticmethod
     def create_single_hospital(id_):

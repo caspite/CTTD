@@ -26,6 +26,14 @@ class DistanceMessage(Msg):
         return "DistanceMessage from " + str(self.sender_id) + " to " + str(self.receiver_id) + ": " + str \
             (self.context)
 
+class BidMessage(Msg):
+    def __init__(self, sender_id, receiver_id, context):
+        Msg.__init__(self, sender_id, receiver_id, context)
+    def __str__(self):
+        return "Bid from " + str(self.sender_id) + " to " + str(self.receiver_id) + ": " + str \
+            (self.context)
+
+
 
 # RPA Offer Message
 class RPAOfferMessage(Msg):
@@ -36,7 +44,13 @@ class RPAOfferMessage(Msg):
         return "RPAOfferMessage from " + str(self.sender) + " to " + str(self.receiver) + ": " + str \
             (self.information)
 
+class ServiceProposalMsg(Msg):
+    def __init__(self, sender_id, receiver_id, context):
+        Msg.__init__(self, sender_id, receiver_id, context)
 
+    def __str__(self):
+        return "ServiceProposalMsg from " + str(self.sender) + " to " + str(self.receiver) + ": " + str \
+            (self.information)
 class SP(Agent, ABC):
     def __init__(self, simulation_entity: ServiceProvider, t_now, algorithm_version):
         Agent.__init__(self, simulation_entity=simulation_entity, t_now=t_now)
@@ -90,6 +104,10 @@ class SR(Agent, ABC):
         self.terminated = {}  # {skill:T\F}
         self.algorithm_version = algorithm_version
 
+        # msg variables
+        self.offers_received_by_skill = {}
+        self.reset_offers_received_by_skill()
+
         # neighbor variables
         self.neighbors = []  # all neighbors ids
         self.neighbors_by_skill = {}  # {skill: [provider_ids]}
@@ -121,6 +139,11 @@ class SR(Agent, ABC):
     def reset_simulation_times_for_utility(self):
         for skill in self.skills_needed.keys():
             self.simulation_times_for_utility[skill] = {}
+
+    # reset offers by skill
+    def reset_offers_received_by_skill(self):
+        for skill in self.skills_needed:
+            self.offers_received_by_skill[skill] = []
 
     # utility methods
     def calculate_current_utility(self):

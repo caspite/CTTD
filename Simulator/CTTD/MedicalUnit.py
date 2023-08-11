@@ -217,6 +217,8 @@ class MedicalUnit(ServiceProvider):
         NCLO += super().number_of_comparisons(NCLO_offer_counter + 1, len(offers_received))
         return NCLO, current_xi, response_offers
 
+    def get_max_capacity(self):
+        return (copy.deepcopy(self._max_capacity[0]), copy.copy(self._max_capacity[1]))
     def accept_full_schedule_offer(self, offers_received):
         from SynchronizedAlgorithms.SynchronizedSolver import VariableAssignment
         next_available_arrival_time = self.last_time_updated

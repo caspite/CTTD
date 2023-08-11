@@ -8,13 +8,14 @@ from Simulator.AbstractSimulator.AbstractSimulatorComponents import AbstractSimu
 from Simulator.CTTD.CttdSimulatorComponents import CttdSimulatorComponents
 from Solver.SolverAbstract import Mailer, Agent
 from SynchronizedAlgorithms.RPA.Main_RPA import RPA
+from SynchronizedAlgorithms.DSRM.Main_DSRM import DSRM
 #only for git checking
 dbug = True
 alfa = 0.7  # RPA dumping prop
-SR_amount = [5] # [5, 10, 20]
-SP_amount = [10]  # [5,10,15,20,25,30,35,40]
-problems_amount = 15
-algorithm_type = ["RPA"]  # 1 - RPA, 2 - DSRM / none
+SR_amount = [2] # [5, 10, 20]
+SP_amount = [4]  # [5,10,15,20,25,30,35,40]
+problems_amount = 1
+algorithm_type = ["DSRM"]  # 1 - RPA, 2 - DSRM / none
 solver_type = ["SOMAOP"]  # 1-SOMAOP 2-DCOP
 simulation_type = ["CTTD"]  # "Abstract", "CTTD"
 algorithm_version = [0,1] # [0, 1, 2, 3, 4, 5] 0: regular version, 1: SA, 3: incremental  4: full schedule, 5: full schedule one shote 2 - dumping not in use
@@ -58,6 +59,9 @@ def create_synchronized_solver(problem):
         if algorithm.split("_")[0] == "RPA":
             return RPA(problem_id=problem.problem_id, providers=problem.providers, requesters=problem.requesters,
                        max_iteration=termination, bid_type=bid, algorithm_version=version, alfa=alfa)
+        if algorithm.split("_")[0] == "DSRM":
+            return DSRM(problem_id=problem.problem_id, providers=problem.providers, requesters=problem.requesters,
+                       bid_type=bid, algorithm_version=version)
 
 
 def create_and_meet_mailer(agents: [Agent], problem_id, solver):
