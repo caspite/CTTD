@@ -17,9 +17,9 @@ SP_amount = [4]  # [5,10,15,20,25,30,35,40]
 problems_amount = 1
 algorithm_type = ["DSRM"]  # 1 - RPA, 2 - DSRM / none
 solver_type = ["SOMAOP"]  # 1-SOMAOP 2-DCOP
-simulation_type = ["CTTD"]  # "Abstract", "CTTD"
+simulation_type = ["Abstract"]  # "Abstract", "CTTD"
 algorithm_version = [0,1] # [0, 1, 2, 3, 4, 5] 0: regular version, 1: SA, 3: incremental  4: full schedule, 5: full schedule one shote 2 - dumping not in use
-bid_type = [1,2,3]  # [1, 2, 3] 1 - coverage bid, 2 - shapley, 3- contribution
+bid_type = [3]  # [1, 2, 3] 1 - coverage bid/ truncated, 2 - shapley, 3- simple
 termination = 250  # termination for RPA
 
 # for DCOP privacy coherency

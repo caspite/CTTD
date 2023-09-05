@@ -43,7 +43,7 @@ class InitializeSimulationEvent(Event):
         return "Initialize simulation"
 
 
-class ProviderArriveToRequestEvent(Event):
+class ProviderArriveToRequesterEvent(Event):
     def __init__(self, arrival_time, provider, requester, skill, mission):
         super().__init__(arrival_time, EventType.PROVIDER_ARRIVES_TO_REQUESTER)
         self.provider = provider
@@ -67,8 +67,14 @@ class ProviderLeaveRequesterEvent(Event):
         self.importance = 0
 
     def __str__(self):
-        return "Provider Leave Event %s P: %s R: %s S: %s M: %s" \
+        return "Provider Leave event at %s P: %s R: %s S: %s M: %s" \
             %(self.arrival_time, self.provider, self.requester, self.skill, self.mission)
+
+
+
+# Msg Class
+
+
 
 #----------------------------------------------------------------
 
@@ -106,7 +112,7 @@ class DSRM(SynchronizedSolverSOMAOP):
                 self.run_gale_shapley()
                 continue
 
-            elif isinstance(self.next_event, ProviderArriveToRequestEvent):
+            elif isinstance(self.next_event, ProviderArriveToRequesterEvent):
                 self.handle_provider_arrives_to_requester_event()
                 continue
 
@@ -160,6 +166,7 @@ class DSRM(SynchronizedSolverSOMAOP):
         for requester in self.all_requesters:
             requester.update_skills_received(self.current_time)
             requester.update_time_per_skill_unit(self.current_time)
+            requester.reset_offers_received_by_skill()
 
     def remove_irrelevant_agents_for_algorithm(self):
         self.SRs = copy.copy(self.all_requesters)
@@ -282,7 +289,7 @@ class DSRM(SynchronizedSolverSOMAOP):
         to_remove = []
         for sp in self.algorithm_providers:
             for sr in self.algorithm_requesters:
-                if sp.id_ in sr.neighbors:
+                if sp._id in sr.neighbors:
                     break
             else:
                 to_remove.append(sp)

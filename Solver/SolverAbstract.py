@@ -204,6 +204,8 @@ class Agent(threading.Thread, ABC):
         """
         raise NotImplementedError()
 
+
+
     # @abc.abstractmethod
     # def check_termination(self):
     #     """

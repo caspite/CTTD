@@ -25,6 +25,7 @@ class VariableAssignment:
         self.utility = utility
         self.max_capacity = max_capacity
         self.accept = accept  # has offers accept - for incremental version
+        self.last_workload_use = 0 # the last time that the workload has been done
         if mission is None:
             self.mission = []
         else:
@@ -107,6 +108,7 @@ class SynchronizedSolverSOMAOP(object):
                         requester.neighbors_by_skill[skill].append(provider.getId())
                         provider_skills_available_in_common[skill] = provider.skill_set[skill]
                         requester_skills_needs_in_common[skill] = requester.skills_needed[skill]
+                        provider.neighbors_by_skill[skill].append(requester.getId())
                         provider.xi_size += 1
                         domain_opt = VariableAssignment(provider.getId(), requester.getId(), skill,
                                                         copy.deepcopy(requester.location))

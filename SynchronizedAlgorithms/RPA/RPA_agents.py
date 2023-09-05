@@ -101,12 +101,12 @@ class RpaSR(SR):
             self.print_response_offers()
         while self.offers_to_send:
             offer = self.offers_to_send.pop(0)
-            msg_offer = RPAOfferMessage(self._id, offer.provider, offer)
+            msg_offer = OfferMessage(self._id, offer.provider, offer)
             self.mailer.send_msg(msg_offer)
 
     # 4 - receive incoming information from neighbors
     def agent_receive_a_single_msg(self, msg):
-        if isinstance(msg, RPAOfferMessage):
+        if isinstance(msg, OfferMessage):
             offer = msg.information
             self.offers_received_by_skill[offer.skill].append(offer)
 
@@ -233,13 +233,13 @@ class RpaSP(SP):
     def send_msgs(self):
         while self.response_offers:
             offer = self.response_offers.pop(0)
-            msg_availability = RPAOfferMessage(self._id, offer.requester, offer)
+            msg_availability = OfferMessage(self._id, offer.requester, offer)
             self.mailer.send_msg(msg_availability)
 
 
     # 5 - receive incoming information from neighbors
     def agent_receive_a_single_msg(self, msg):
-        if isinstance(msg, RPAOfferMessage):
+        if isinstance(msg, OfferMessage):
             self.offers_received.append(msg.information)
 
     # 6 - dbug print methods

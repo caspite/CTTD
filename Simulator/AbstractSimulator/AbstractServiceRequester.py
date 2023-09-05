@@ -93,6 +93,7 @@ class Requester(ServiceRequester):
             update_unallocated(unallocated_offers)  # skill_offers_by_arrival[q:]
             # {offer: (arrival time, workload)}
             offers_skill_available_dict = get_skill_amount_dict(offers_to_allocate)
+            for offer in offers_skill_available_dict.keys(): offer.mission = []
 
             while skills_needed_temp[skill] > 0 and offers_skill_available_dict:
                 # order offers by next skill unit work start
@@ -104,12 +105,13 @@ class Requester(ServiceRequester):
                 offer_stats = next(iter(offers_skill_available_dict.items()))
                 allocated_offers[skill].add(offer_stats[0])
                 # arrival time
-                offer_stats[0].leaving_time += round(self.time_per_skill_unit[skill], 2)
+                offer_stats[0].leaving_time = round(offer_stats[0].leaving_time + self.time_per_skill_unit[skill], 2)
                 offer_stats[0].duration = round(offer_stats[0].leaving_time - offer_stats[0].arrival_time, 2)
                 # skill left
                 offer_stats[0].amount += 1
                 offer_stats[1][0] -= 1
                 skills_needed_temp[skill] -= 1
+                offer_stats[0].mission.append(1)
 
                 # no skill left
                 if offer_stats[1][0] == 0:
@@ -129,8 +131,6 @@ class Requester(ServiceRequester):
         util_available = self.max_util[skill] + rate_of_util_fall * offer.arrival_time
         util_received = util_available * (offer.amount / self.skills_requirements[skill])
         return max(round(util_received, 2), 0)
-
-
 
     def final_utility(self, allocated_offers, SP_view=None, cost = None):
         simulation_times = self.create_simulation_times(allocated_offers, SP_view)
@@ -214,11 +214,25 @@ class Requester(ServiceRequester):
         return simulation_times
 
 
+    def update_cap(self, skill, workload):
+        if self.max_required[skill] > workload:
+            self.max_required[skill] = workload
 
+    def reduce_skill_requirement(self, service, current_time):
+        skills_received = int(round(current_time - service.last_workload_use, 2) /
+                              self.time_per_skill_unit[service.skill])
+        service.last_workload_use += self.time_per_skill_unit[service.skill] * skills_received
+        service.last_workload_use = round(service.last_workload_use, 2)
+        return skills_received
+
+
+    def get_care_time(self, skill,time):
+        return self.time_per_skill_unit[skill]
 def update_unallocated(offers):
     for offer in offers:
         offer.utility = 0
         offer.amount = 0
+
 
 
 
@@ -237,3 +251,6 @@ def cap(team, max_required):
     cap_outcome = 0.5 + rate * (team - 1)
 
     return cap_outcome
+
+
+

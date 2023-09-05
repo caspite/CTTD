@@ -34,9 +34,8 @@ class BidMessage(Msg):
             (self.context)
 
 
-
 # RPA Offer Message
-class RPAOfferMessage(Msg):
+class OfferMessage(Msg):
     def __init__(self, sender_id, receiver_id, context):
         Msg.__init__(self, sender_id, receiver_id, context)
 
@@ -50,6 +49,30 @@ class ServiceProposalMsg(Msg):
 
     def __str__(self):
         return "ServiceProposalMsg from " + str(self.sender) + " to " + str(self.receiver) + ": " + str \
+            (self.information)
+
+class GSResponseMsg(Msg):
+    def __init__(self, sender_id, receiver_id, context):
+        Msg.__init__(self, sender_id, receiver_id, context)
+
+    def __str__(self):
+        return "GSResponseMsg from " + str(self.sender) + " to " + str(self.receiver) + ": " + str \
+            (self.information)
+
+class GSUpdateServiceMessage(Msg):
+    def __init__(self, sender_id, receiver_id, context):
+        Msg.__init__(self, sender_id, receiver_id, context)
+
+    def __str__(self):
+        return "GSUpdateServiceMessage from " + str(self.sender) + " to " + str(self.receiver) + ": " + str \
+            (self.information)
+
+class UpdateServiceMessage(Msg):
+    def __init__(self, sender_id, receiver_id, context):
+        Msg.__init__(self, sender_id, receiver_id, context)
+
+    def __str__(self):
+        return "UpdateServiceMessage from " + str(self.sender) + " to " + str(self.receiver) + ": " + str \
             (self.information)
 class SP(Agent, ABC):
     def __init__(self, simulation_entity: ServiceProvider, t_now, algorithm_version):
@@ -65,11 +88,13 @@ class SP(Agent, ABC):
         self.neighbor_locations = {}  # {neighbor_id: location}
         self.schedule = []
         self.algorithm_version = algorithm_version
+        self.neighbors_by_skill = {}  # {skill: [requester_ids]}
 
         # provider xi Variables
         self.xi_size = 0  # the amount of variables i have
         self.current_xi = {}  # variable assignments {x_id:assignment}
         self.domain = []  # [all domain options]
+        self.reset_neighbors_by_skill()
 
     def __str__(self):
         return "SP " + Agent.__str__(self)
@@ -92,7 +117,9 @@ class SP(Agent, ABC):
     def travel_time(self, start_location, end_location):
         return self.simulation_entity.travel_time(start_location, end_location)
 
-
+    def reset_neighbors_by_skill(self):
+        for skill in self.skill_set.keys():
+            self.neighbors_by_skill[skill] = []
 class SR(Agent, ABC):
     def __init__(self, simulation_entity: ServiceRequester, t_now, bid_type, algorithm_version):
         Agent.__init__(self, simulation_entity=simulation_entity, t_now=t_now)
@@ -131,9 +158,7 @@ class SR(Agent, ABC):
 
     # reset methods
     # initiates neighbors_by_skill dict
-    def reset_neighbors_by_skill(self):
-        for skill in self.skills_needed.keys():
-            self.neighbors_by_skill[skill] = []
+
 
     # initiates simulation_times_for_utility dict
     def reset_simulation_times_for_utility(self):
@@ -157,3 +182,7 @@ class SR(Agent, ABC):
         return provider.travel_time(start_location=provider.simulation_entity.location,
                                     end_location=self.simulation_entity.location) <= self.max_time \
                and len(skills_in_common) > 0
+
+    def reset_neighbors_by_skill(self):
+        for skill in self.skills_needed.keys():
+            self.neighbors_by_skill[skill] = []

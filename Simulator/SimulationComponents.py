@@ -283,7 +283,7 @@ class ServiceRequester(Entity, ABC):
         :param workload: the workload to reduce
         :return: None if success else exception
         """
-        self.skills_requirements[skill] -= workload if self.requirements[skill] > workload else \
+        self.skills_requirements[skill] -= workload if self.skills_requirements[skill] > workload else \
             Exception("The workload is higher than the requirements")
 
     def add_scheduled_service(self, service):

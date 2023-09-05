@@ -1,6 +1,6 @@
 import copy
 
-from Simulator.SimulationComponents import ServiceProvider,calc_distance
+from Simulator.SimulationComponents import ServiceProvider, calc_distance, Status
 
 
 class Provider(ServiceProvider):
@@ -175,3 +175,23 @@ class Provider(ServiceProvider):
         # NCLO
         NCLO += super().number_of_comparisons(NCLO_offer_counter + 1, len(offers_received))
         return NCLO, current_xi, response_offers
+
+
+    def arrive_to_requester(self, last_time, location):
+        self.status = Status.ON_MISSION
+
+        self.update_location(location)
+
+        self.last_time_updated= last_time
+
+    def update_capacity(self, current_service, current_time, work_time_i):
+        skill_usage = int(round(current_time - self.last_time_updated, 2) / \
+                          work_time_i[current_service.requester][current_service.skill])
+
+        self.skill_set[current_service.skill] -= skill_usage
+
+        if self.skill_set[current_service.skill] == 0:
+            del self.skill_set[current_service.skill]
+
+        self.last_time_updated += work_time_i[current_service.requester][current_service.skill] * skill_usage
+        return  self.last_time_updated, self.skill_set[current_service.skill]
