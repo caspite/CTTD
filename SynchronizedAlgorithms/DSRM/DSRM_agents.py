@@ -224,12 +224,12 @@ class DsrmSR(SR):
 
     def reset_GS_accepted_providers(self):
         self.GS_accepted_providers = {}
-        for skill in self.sim_temp_temp_skills_needed:
+        for skill in self.neighbors_by_skill:
             self.GS_accepted_providers[skill] = set()
 
     def reset_GS_accepted_providers_utility(self):
         self.GS_accepted_providers_utility = {}
-        for skill in self.sim_temp_temp_skills_needed:
+        for skill in self.skills_needed:
             self.GS_accepted_providers_utility[skill] = {}
 
     # --------------------GS ALGORITHM RELATED METHODS--------------------------
@@ -266,7 +266,7 @@ class DsrmSR(SR):
 
     def reset_GS_has_offered(self):
         self.GS_has_offered = {}
-        for skill in self.neighbors_by_skill:
+        for skill in self.skills_needed:
             self.GS_has_offered[skill] = []
 
 
@@ -299,7 +299,7 @@ class DsrmSR(SR):
         self.calculate_utilities()
         self.send_utilities()
 
-        self.initialize_GS_has_not_offered()
+        self.initialize_GS_has_not_offered() # all SPs that sent an offer
         self.make_and_send_GS_offers()
 
     # 2 - algorithm compute (single agent response to iteration)
@@ -339,7 +339,7 @@ class DsrmSR(SR):
         for neighbor in self.neighbors:
             neighbor_utils = {}
             for skill in self.util_j:
-                if neighbor in self.util_j[skill]:
+                if neighbor in self.util_j[skill] and self.util_j[skill][neighbor] > self.simulation_entity.utility_threshold_for_acceptance:
                     neighbor_utils[skill] = self.util_j[skill][neighbor]
             msg = BidMessage(self._id, neighbor, copy.deepcopy(neighbor_utils))
             self.mailer.send_msg(msg)
@@ -356,7 +356,8 @@ class DsrmSR(SR):
             for skill in self.skills_needed:
                 if msg.information.arrival_time+ self.mailer.current_time + self.time_per_skill_unit[skill] < self.max_time:
                     if msg.sender not in self.neighbors: self.neighbors.append(msg.sender)
-                    if  msg.sender in self.neighbors_skill.keys():
+                    if  msg.sender in self.neighbors_skill.keys() and \
+                    msg.information.skill not in self.neighbors_skill[msg.sender]:
                         self.neighbors_skill[msg.sender].append(msg.information.skill)
                     else:
                         self.neighbors_skill[msg.sender] = []
@@ -390,8 +391,13 @@ class DsrmSR(SR):
         self.send_offer_msgs(offers_by_neighbor)
 
     def choose_best_SPs_to_offer(self, skill):
+
+        if skill not in self.GS_accepted_providers.keys():
+            self.GS_accepted_providers[skill] = set()
         number_to_allocate = self.sim_temp_max_required[skill] - len(self.GS_accepted_providers[skill])
 
+        if skill not in self.util_j:
+            self.util_j[skill] = {}
         utilities_for_options = copy.deepcopy(self.util_j[skill])
         to_remove = [sp for sp in utilities_for_options if sp not in self.GS_has_not_offered[skill]]
         for sp in to_remove:
@@ -424,16 +430,34 @@ class DsrmSR(SR):
         if self.bid_type == 3:
             self.update_simple_bids()
         elif self.bid_type == 1:
-            self.update_trancated_bids() #todo
+            self.update_truncated_bids()
 
     def update_simple_bids(self):
         """
         update self.util_j
         :return:
         """
-        for skill in self.sim_temp_temp_skills_needed:
+        for skill in self.skills_needed:
             for offer in self.offers_received_by_skill[skill]:
                self.util_j[offer.skill][offer.provider] = self.calc_simple_bid(offer)
+
+    def update_truncated_bids(self):
+        """
+        update self.util_j
+        :return:
+        """
+        skill_needed = copy.deepcopy(self.skills_needed)
+        offers_to_allocate = copy.deepcopy(self.offers_received_by_skill)
+        allocated_offers, _ = self.temp_simulation_entity.allocated_offers(skill_needed, offers_to_allocate)
+        for skill in allocated_offers:
+            for offer in allocated_offers[skill]:
+                    self.util_j[offer.skill][offer.provider] = self.simulation_entity.calc_converge_bid_to_offer(skill, offer)
+        #add not offered neighbors
+        for skill in self.offers_received_by_skill:
+            for offer in self.offers_received_by_skill[skill]:
+                neighbor = offer.provider
+                if neighbor not in self.util_j[skill]:
+                    self.util_j[skill][neighbor] = self.simulation_entity.utility_threshold_for_acceptance
 
 
     def calc_simple_bid(self, offer):
@@ -446,35 +470,14 @@ class DsrmSR(SR):
         bid = utility_simple
         return round(max(0, bid), 2)
 
+
     def send_msgs(self):
         pass
 
-    def update_utility_iterative(self): #todo!!! should be at simulation entity - the same as RPA
-        pass
+    def final_utility(self):
+        return self.temp_simulation_entity.final_utility(simulation_times=self.simulation_times_for_utility)
 
-    #todo - move to simulation entity
-    def get_util(self, neighbors_working_together, skill):
-        util = self.max_util[skill]
-        total_skill = 0
-        total_travel_times = 0
-        for provider_id in neighbors_working_together:
-            total_skill += self.neighbor_skills[provider_id][skill]
-            total_travel_times += self.neighbor_arrival_times[provider_id]
 
-        if total_skill > self.sim_temp_temp_skills_needed[skill]:
-            total_skill = copy.deepcopy(self.sim_temp_temp_skills_needed[skill])
-
-        # skill cover factor
-        if total_skill / self.sim_temp_temp_skills_needed[skill] < 1:
-            util *= total_skill / self.sim_temp_temp_skills_needed[skill]
-
-        # penalty for delay * distance = utility lost for arrival
-        util -= self.penalty_for_delay * total_travel_times
-
-        # cap function
-        util *= cap(len(neighbors_working_together), self.sim_temp_max_required[skill])
-
-        return util
 
     # todo - this is the new one
     # def get_util(self, neighbors_working_together, skill):
@@ -665,6 +668,7 @@ class DsrmSR(SR):
         for skill in self.GS_accepted_providers:
             accepted_offers[skill]  = [offer for offer  in self.offers_received_by_skill[skill] if offer.provider in \
             self.GS_accepted_providers[skill]]
+        temp_skills_needed_temp = {skill: workload for skill, workload in temp_skills_needed_temp.items() if skill in accepted_offers.keys()}
         offers, self.NCLO = self.temp_simulation_entity.allocated_offers(temp_skills_needed_temp,accepted_offers)
         offers_list = [value for sublist in offers.values() for value in sublist]
 
@@ -707,6 +711,7 @@ class DsrmSR(SR):
 
                 if self.sim_temp_temp_skills_needed[service.skill] == 0:
                     del self.sim_temp_temp_skills_needed[service.skill]
+
 
 def find_ratio_of_travel_complete(time_travel_begin, arrival_time, current_time):
     return (current_time - time_travel_begin) / (arrival_time - time_travel_begin)

@@ -99,6 +99,7 @@ class DSRM(SynchronizedSolverSOMAOP):
         self.event_diary.append(InitializeSimulationEvent(0))
 
     def execute_algorithm(self):
+
         while self.event_diary:
             self.event_diary = sorted(self.event_diary, key=lambda event: (event.arrival_time, event.importance))
             self.next_event = self.event_diary.pop(0)
@@ -121,12 +122,11 @@ class DSRM(SynchronizedSolverSOMAOP):
                 # in the event that there are multiple leaving events at the same time - all leave before running alg
                 if not (self.event_diary and isinstance(self.event_diary[0], ProviderLeaveRequesterEvent) \
                         and self.event_diary[0].arrival_time == self.current_time):
+                    self.record_data()
                     self.run_gale_shapley()
                 continue
 
-                self.record_data()
-
-            self.handle_simulation_end_event()
+        self.handle_simulation_end_event()
 #this is a check
     #start iteration of the
     def run_gale_shapley(self):
@@ -176,7 +176,7 @@ class DSRM(SynchronizedSolverSOMAOP):
             # not relevant time-wise anymore
             if requester.max_time <= self.current_time:
                 self.SRs.remove(requester)
-                self.remove_requester_neighbors(requester.id_)
+                self.remove_requester_neighbors(requester._id)
                 continue
 
             # if the requester has at least one skill he needs, keep him
@@ -194,7 +194,7 @@ class DSRM(SynchronizedSolverSOMAOP):
                     break
             else:
                 self.SPs.remove(provider)
-                self.remove_provider_neighbors(provider.id_)
+                self.remove_provider_neighbors(provider._id)
                 continue
 
 
@@ -249,6 +249,7 @@ class DSRM(SynchronizedSolverSOMAOP):
             for skill in sr.neighbors_by_skill.keys():
                 if len(sr.GS_accepted_providers[skill]) >= sr.sim_temp_max_required[skill]:
                     del neighbors_by_skill_temp[skill]
+
 
             sr.neighbors_by_skill = neighbors_by_skill_temp
 
@@ -321,8 +322,6 @@ class DSRM(SynchronizedSolverSOMAOP):
 
     def handle_simulation_end_event(self):
         self.record_data()
-        # if simDebug:
-        #     self.print_max_abilities_needed()
 
 
     def calculate_global_utility(self):

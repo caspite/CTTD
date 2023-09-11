@@ -19,7 +19,7 @@ algorithm_type = ["DSRM"]  # 1 - RPA, 2 - DSRM / none
 solver_type = ["SOMAOP"]  # 1-SOMAOP 2-DCOP
 simulation_type = ["Abstract"]  # "Abstract", "CTTD"
 algorithm_version = [0,1] # [0, 1, 2, 3, 4, 5] 0: regular version, 1: SA, 3: incremental  4: full schedule, 5: full schedule one shote 2 - dumping not in use
-bid_type = [3]  # [1, 2, 3] 1 - coverage bid/ truncated, 2 - shapley, 3- simple
+bid_type = [1]  # [1, 2, 3] 1 - coverage bid/ truncated, 2 - shapley, 3- simple
 termination = 250  # termination for RPA
 
 # for DCOP privacy coherency
@@ -243,9 +243,12 @@ def update_final_utility_over_agents_amount():
     this method update the final utility for each problem size
     '''
     
-    last_utility = global_utility_over_NCLO.get(algorithm)[-1] #the last utility
+    last_utility = global_utility_over_NCLO[algorithm][max(global_utility_over_NCLO[algorithm].keys())]#the last utility
     problem_size = ('SR%sSP%s' %(SR_amount,SP_amount))
-    final_utility_over_agents_amount[problem_size] = last_utility
+    if algorithm not in final_utility_over_agents_amount.keys():
+        final_utility_over_agents_amount[algorithm]={}
+    else:
+        final_utility_over_agents_amount[algorithm][problem_size] = last_utility
 
 
 
@@ -289,7 +292,10 @@ if __name__ == '__main__':
                         for algorithm in algorithm_type:
                             for version in algorithm_version:
                                 for bid in bid_type:
+
                                     algorithm = algorithm.split('_')[0] + '_' + str(version) + '_' + str(bid)
+                                    if algorithm.startswith('DSRM_1'):
+                                        continue
                                     initiate_data_frames_fo_algorithm()
                                     if dbug:
                                         print("Running simulation. \n %s SPs, %s SRs problem type: "
@@ -298,6 +304,6 @@ if __name__ == '__main__':
                                     problems = create_problems_simulation()
                                     solve_problems(in_problems=problems)
                             to_excel()
-                            plot_chart()
+                        plot_chart()
 
             update_final_utility_over_agents_amount()

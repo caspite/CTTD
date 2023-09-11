@@ -82,6 +82,8 @@ class Requester(ServiceRequester):
 
         for skill in skills_needed_temp:
             allocated_offers[skill] = set()
+            if skill not in offers_received_by_skill.keys():
+                print("Skill not in offers_received_by_skill")
             skill_offers_by_arrival = [offer for offer in offers_received_by_skill[skill] if
                                        offer.utility is not 0]
             skill_offers_by_arrival = list(sorted(skill_offers_by_arrival, key=lambda offer: offer.arrival_time))
@@ -132,8 +134,9 @@ class Requester(ServiceRequester):
         util_received = util_available * (offer.amount / self.skills_requirements[skill])
         return max(round(util_received, 2), 0)
 
-    def final_utility(self, allocated_offers, SP_view=None, cost = None):
-        simulation_times = self.create_simulation_times(allocated_offers, SP_view)
+    def final_utility(self, allocated_offers=None, SP_view=None, cost = None, simulation_times= None):
+        if simulation_times is None:
+            simulation_times = self.create_simulation_times(allocated_offers, SP_view)
         all_util = 0
         for skill, amount_needed in self.skills_requirements.items():
             if skill in simulation_times.keys():

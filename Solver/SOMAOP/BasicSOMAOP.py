@@ -148,7 +148,7 @@ class SR(Agent, ABC):
         self.reset_simulation_times_for_utility()
 
     # 1 - calculates final utility according to team_simulation_times_for_utility dict
-    def final_utility(self, SP_view):
+    def final_utility(self, SP_view=None):
         """
         method that get the relevant SPs and return the final utility - calc by simulation entity
         :param SP_view:

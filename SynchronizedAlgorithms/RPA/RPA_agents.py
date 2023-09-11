@@ -124,9 +124,10 @@ class RpaSR(SR):
             print(" %s  --> %s: %s | bid %s | A.T %s | amount %s"
                   % (offer.requester, offer.provider, offer.skill, offer.utility, offer.arrival_time, offer.amount))
             for mission in offer.mission:
-                print("ID: %s, Sur: %s ||" %
-                      ( mission['mission'].get_id(), round(mission['mission'].survival_by_time(
-                mission['arrival_time']), 2)))
+                if isinstance(mission,dict):
+                    print("ID: %s, Sur: %s ||" %
+                          ( mission['mission'].get_id(), round(mission['mission'].survival_by_time(
+                    mission['arrival_time']), 2)))
 
 
 
@@ -261,6 +262,7 @@ class RpaSP(SP):
             print("%s --> %s: %s | bid: %s"
                   % (offer.provider, offer.requester, offer.skill, offer.utility))
             for mission in offer.mission:
-                print("\nID: %s, Sur: %s ||" %
-                      (mission['mission'].get_id(), round(mission['mission'].survival_by_time(
-                          mission['arrival_time']), 2)))
+                if isinstance(mission,dict):
+                    print("\nID: %s, Sur: %s ||" %
+                          (mission['mission'].get_id(), round(mission['mission'].survival_by_time(
+                              mission['arrival_time']), 2)))
