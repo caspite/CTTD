@@ -187,7 +187,6 @@ class Provider(ServiceProvider):
     def update_capacity(self, current_service, current_time):
         skill_usage = int(current_service.amount * round(current_time - self.last_time_updated, 2) / \
                           current_service.duration)
-
         self.skill_set[current_service.skill] -= skill_usage
 
         skill_amount_left = copy.copy(self.skill_set[current_service.skill])
@@ -195,4 +194,5 @@ class Provider(ServiceProvider):
             del self.skill_set[current_service.skill]
 
         self.last_time_updated += round((current_service.duration/current_service.amount) * skill_usage,2)
+        current_service.last_workload_use = self.last_time_updated
         return  self.last_time_updated, skill_amount_left

@@ -122,7 +122,7 @@ class Casualty:
         elif skill == 'uploading':
             return self.current_RPM.get_uploading_by_time(time)
         else:
-            return 0.0
+            return 0.1
 
     def get_id(self):
         return copy.copy(self._id)
@@ -134,8 +134,8 @@ class Casualty:
         return self._id == other._id
 
     def __str__(self):
-        return 'Id: '+self._id + ' RPM: '+self._init_RPM + ' schedule status: ' + self.scheduled_status \
-               + 'preformed status: ' + self.preformed_status
+        return 'Id: '+str(self._id) + ' RPM: '+str(self._init_RPM) + ' schedule status: ' + self.scheduled_status \
+               + ' preformed status: ' + self.preformed_status
 
     def __hash__(self):
         return self._id

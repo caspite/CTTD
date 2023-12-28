@@ -100,6 +100,7 @@ class DisasterSite(ServiceRequester, ABC):
         self.casualties_needed_activities = {}  # {casualties_id: [skills_activities]}
         self.add_casualties(casualties)
         self.near_hospital = [0.0, 0.0]  # updated later
+        self.utility_threshold_for_acceptance = 0.0
 
     def add_casualties(self, casualties):
         self.casualties += casualties
@@ -171,7 +172,6 @@ class DisasterSite(ServiceRequester, ABC):
             #         print('bug')
             casualties_needed_skill = [(cas, value[1]) for cas, value in casualties_to_allocate.items() if
                                        value[0][0] == skill]
-
             # while more casualties to allocate and offers available
             while offers_skill_available_dict:
 
@@ -255,6 +255,7 @@ class DisasterSite(ServiceRequester, ABC):
                                         reverse=True))
         sorted_casualties = {cas.get_id(): value for cas, value in sorted_casualties.items()}
         return sorted_casualties
+
     def remove_accepted_offers(self, offers_received_by_skill, casualties_to_allocate):
         for skill, offers in offers_received_by_skill.items():
             for offer in offers:
@@ -266,6 +267,22 @@ class DisasterSite(ServiceRequester, ABC):
 
         return offers_received_by_skill, casualties_to_allocate
 
+    def reduce_skill_requirement(self, service, current_time):
+        skills_received = 0
+        for mission_dict in service.mission:
+            if mission_dict['leaving_time'] <= current_time:
+                self.casualties_needed_activities[mission_dict['mission'].get_id()].popleft()
+                if service.skill == 'treatment':
+                    mission_dict['mission'].receive_treatment(mission_dict['arrival_time'])
+                elif service.skill == 'uploading':
+                    mission_dict['mission'].uploaded(mission_dict['arrival_time'])
+                elif service.skill == 'transportation':
+                    mission_dict['mission'].uploaded(mission_dict['arrival_time'])
+                    del self.casualties_needed_activities[mission_dict['mission'].get_id()]
+                service.last_workload_used = mission_dict['leaving_time']
+                self.skills_requirements[service.skill] -= 1
+                skills_received += 1
+        return skills_received
 
     def get_next_casualty(self, casualties_by_id, arrival_time, agent_capabilities, initial_triage_time=True):
         """
@@ -329,7 +346,7 @@ class DisasterSite(ServiceRequester, ABC):
         return next((casualty for casualty in self.casualties if casualty.get_id() == cas_id), None)
 
     # 2 - calculate final utility by current scheduled SPs view
-    def final_utility(self, allocated_offers, SP_view=None, utility_version=0, cost=True):
+    def final_utility(self, allocated_offers, SP_view=None, utility_version=0, cost=True, simulation_times=None):
         """
 
         :param allocated_offers:
@@ -347,7 +364,8 @@ class DisasterSite(ServiceRequester, ABC):
         casualties_schedule = create_schedule_for_casualties(copy.deepcopy(self.casualties_needed_activities),
                                                              schedules)
         # casualties with their survival probability by schedule {cas: prop}
-        casualties_survival_dict = self.create_survival_dict_by_schedule(casualties_schedule)
+        casualties_survival_dict = self.create_survival_dict_by_schedule(copy.deepcopy(casualties_schedule))
+        casualties_potential_dict = self.create_survival_potential_by_schedule(casualties_schedule)
         if utility_version == 0:
             count = sum(1 for value in casualties_survival_dict.values() if value > 0.4)
 
@@ -363,7 +381,10 @@ class DisasterSite(ServiceRequester, ABC):
         if cost:
             return final_utility
         else:
-            return count
+            if len(casualties_survival_dict) > 0:
+                return functools.reduce(lambda x, y: x+y, casualties_potential_dict.values())
+            else:
+                return 0
 
     def create_survival_dict_by_schedule(self, casualties_schedule):
         """
@@ -394,6 +415,35 @@ class DisasterSite(ServiceRequester, ABC):
                 casualties_survival_prob[casualty] = survival_probability
                 break
         return casualties_survival_prob
+
+    def create_survival_potential_by_schedule(self, casualties_schedule):
+        """
+       :param casualties_schedule: {cas_id:{skill:start_time}}
+       :return: {cas: survival potential}
+       """
+        casualties_survival_potential = {}
+        # simulation of survival probability for each cas
+        for casualty_id in casualties_schedule:
+            casualty = self.get_casualty_by_id(casualty_id)
+            current_RPM = copy.copy(casualty.current_RPM)
+            last_update_time = copy.copy(casualty.last_update_time)
+            schedule = casualties_schedule[casualty_id]
+            care_time = 0
+            while schedule:
+                if type(schedule[0]) is tuple:
+
+                    skill, time = schedule.popleft()
+                    last_update_time = round(time - care_time, 2)
+
+                else:
+                    break
+                current_RPM = current_RPM.get_rpm_by_time(last_update_time)
+                survival_potential = current_RPM.get_survival_potential_by_time(0.0)
+                care_time = casualty.get_care_time(skill, last_update_time)
+                casualties_survival_potential[casualty] = survival_potential
+                break
+        return casualties_survival_potential
+
 
     def calc_converge_bid_to_offer(self, skill, offer):
         """
@@ -426,15 +476,37 @@ class DisasterSite(ServiceRequester, ABC):
         return round(max(0,bid),2)
 
     def get_care_time(self,skill,time):
-        ans=0
+        ans=math.inf
         for cas in self.casualties:
-            if ans < cas.get_care_time(skill, time):
+            if ans > cas.get_care_time(skill, time):
                 ans = cas.get_care_time(skill, time)
         return ans
+
+    def update_cap(self, skill, workload):
+        if self.max_required[skill] > workload:
+            self.max_required[skill] = workload
 
     def __deepcopy__(self, memodict={}):
         copy_object = DisasterSite(self.getId(), self.skills, copy.deepcopy(self.casualties),
                                    self.location, self.last_time_updated, self.skill_weights)
         copy_object.near_hospital = copy.deepcopy(self.near_hospital)
         return copy_object
+
+    def is_offer_relevant(self, offer):
+            if self.next_casualty(copy.deepcopy(self.casualties_needed_activities), offer.skill, offer.arrival_time, offer.max_capacity[0]) is not None:
+                return True
+            else:
+                return False
+
+    def is_provider_needed(self, max_capacity, arrival_time, skill):
+        casualties_to_allocate = copy.deepcopy(self.casualties_needed_activities)
+        casualties_to_allocate = {key: [value, 0.0] for key, value in casualties_to_allocate.items()}
+        casualties_to_allocate = self.sort_casualties_by_potential_survival(casualties_to_allocate)
+        if self.next_casualty(casualties_to_allocate,skill ,arrival_time,max_capacity) is not None:
+            return True
+        else:
+            return False
+
+        # todo check all skills and chek if thier is nect casualty
+
 

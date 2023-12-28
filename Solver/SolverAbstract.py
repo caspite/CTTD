@@ -6,7 +6,7 @@ import random
 
 from Simulator.SimulationComponents import Entity
 
-message_debug = False
+message_debug = True
 
 
 # message passing and communication objects
@@ -259,6 +259,8 @@ class Mailer(object):
     # called from agent to send msg
     def send_msg(self, msg):
         self.msg_box.append(msg)
+        if message_debug:
+            print("msg sent: "+msg.__str__())
 
     # initialize mailer and start run
     def initialize(self):

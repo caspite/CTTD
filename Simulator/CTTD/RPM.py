@@ -72,7 +72,7 @@ class RPM:
         rpm1, rpm2 = self.get_rpms_by_time(time, relative_rpm)
         slope = self.slope(rpm1, rpm2)
         survival = survival_probability[rpm1] + (time % 30) * slope
-        return round(survival, 2)
+        return round(survival, 3)
 
     def get_survival_potential_by_time(self, time):
         return max(self.get_survival_by_time_deterioration(time) -
@@ -127,6 +127,9 @@ class RPM:
     def get_id(self):
         return self._id
 
+    def __str__(self):
+        return str(self._id)
+
 
 
 def triage_by_rpm(rpm):
@@ -136,6 +139,8 @@ def triage_by_rpm(rpm):
         return 'MEDIUM'
     else:
         return 'NON_URGENT'
+
+
 
 
 class Triage(Enum):

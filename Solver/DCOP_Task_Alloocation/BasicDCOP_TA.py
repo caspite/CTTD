@@ -84,7 +84,7 @@ class DCOP_TA_Agent():
         for task_and_skill in task_and_skill_tuples:
             task = task_and_skill[0]
             skill = task_and_skill[1]
-            location = task.current_location
+            location = task.location
             self.domain.append(DCOP_TA_Agent_Variable_Assignment(task.id_, skill, location))
 
     def create_times_for_assignment(self):

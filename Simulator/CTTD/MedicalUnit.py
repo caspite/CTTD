@@ -80,6 +80,9 @@ class MedicalUnit(ServiceProvider):
     def get_max_capacity(self):
         return copy.deepcopy(self._max_capacity)
 
+    def get_capacity(self):
+        return (copy.deepcopy(self._max_capacity[0]), self.current_capacity)
+
     def accept_offers(self, offers_received, allocation_version=0):
 
         from SynchronizedAlgorithms.SynchronizedSolver import VariableAssignment
@@ -217,8 +220,6 @@ class MedicalUnit(ServiceProvider):
         NCLO += super().number_of_comparisons(NCLO_offer_counter + 1, len(offers_received))
         return NCLO, current_xi, response_offers
 
-    def get_max_capacity(self):
-        return (copy.deepcopy(self._max_capacity[0]), copy.copy(self._max_capacity[1]))
     def accept_full_schedule_offer(self, offers_received):
         from SynchronizedAlgorithms.SynchronizedSolver import VariableAssignment
         next_available_arrival_time = self.last_time_updated
@@ -304,6 +305,31 @@ class MedicalUnit(ServiceProvider):
                 new_list.append([requester,skill,location])
         return new_list
 
+    def arrive_to_requester(self, last_time, location):
+        self.status = Status.ON_MISSION
+
+        self.update_location(location)
+
+        self.last_time_updated= last_time
 
 
+    def update_capacity(self, service, current_time):
+        amount_received = max(self._max_capacity[0].values())
+        for mission_dict in service.mission:
+            if mission_dict['leaving_time'] <= current_time:
+                from Simulator.CTTD.CttdSimulatorComponents import get_skill_capacity_points
+                capacity_to_reduce =  get_skill_capacity_points( mission_dict['mission'].get_triage_by_time(0.0))
+                self.current_capacity -= capacity_to_reduce
+                self.last_time_updated = mission_dict['leaving_time']
+                service.last_workload_use = self.last_time_updated
+                amount_received -= 1
+                self.uploaded_casualties.append(mission_dict['mission'])
+        return self.last_time_updated, amount_received
+
+    def __deepcopy__(self, memodict={}):
+        copy_m_unit = MedicalUnit(self._id,  self.speed, self.skills, self.skills_and_triage_tuple,
+                                          self.unit_type, self._max_capacity, self._triage_score, self.last_time_updated,
+                                          self.location)
+
+        return copy_m_unit
 

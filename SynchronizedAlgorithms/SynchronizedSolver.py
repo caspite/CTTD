@@ -9,7 +9,7 @@ dbug = True
 
 class VariableAssignment:
     def __init__(self, provider=None, requester=None, skill=None, location=None, amount=None, duration=0.0, arrival_time=None, leaving_time=None,
-                 utility=None, mission=None, max_capacity=None, original_object=None, accept=False):
+                 utility=None, mission=None, max_capacity=None, original_object=None, accept=False, last_workload_use=0.0):
         if original_object is not None: #todo remove
             self.copy_constructor(original_object)
             return
@@ -25,7 +25,7 @@ class VariableAssignment:
         self.utility = utility
         self.max_capacity = max_capacity
         self.accept = accept  # has offers accept - for incremental version
-        self.last_workload_use = 0 # the last time that the workload has been done
+        self.last_workload_use = last_workload_use # the last time that the workload has been done
         if mission is None:
             self.mission = []
         else:
@@ -45,14 +45,21 @@ class VariableAssignment:
         self.mission = copy.deepcopy(original.mission)
         self.max_capacity = copy.deepcopy(original.max_capacity)
         self.accept = original.accept
+        self.last_workload_use = original.last_workload_use
+        self.location = copy.deepcopy(original.location)
+
 
     def accept_offer(self):
         self.accept = True
 
     def __str__(self):
+        mission_list = " "
+        for mis in self.mission:
+            if isinstance(mis, dict):
+                mission_list += "\n " + str(mis['mission'])
         return "SP " + str(self.provider) + " SR " + str(self.requester) + " skill " + str(self.skill) + \
                " arrival: " + str(self.arrival_time) + " leaving: " + str(self.leaving_time) \
-               + " amount: " + str(self.amount) + "utility:" + str(self.utility)
+               + " amount: " + str(self.amount) + " utility: " + str(self.utility) + " " + mission_list
 
     # for comparing with ==
     def __eq__(self, other):
@@ -71,7 +78,7 @@ class VariableAssignment:
                                          location=self.location, amount=self.amount, duration=self.duration,
                                          arrival_time=self.arrival_time, leaving_time=self.leaving_time,
                                          utility=self.utility,mission=copy.deepcopy(self.mission),
-                                         max_capacity=copy.deepcopy(self.max_capacity), accept=self.accept)
+                                         max_capacity=copy.deepcopy(self.max_capacity), accept=self.accept, last_workload_use=self.last_workload_use)
         return copy_object
 
 

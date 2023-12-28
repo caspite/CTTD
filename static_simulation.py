@@ -12,14 +12,14 @@ from SynchronizedAlgorithms.DSRM.Main_DSRM import DSRM
 #only for git checking
 dbug = True
 alfa = 0.7  # RPA dumping prop
-SR_amount = [2] # [5, 10, 20]
-SP_amount = [4]  # [5,10,15,20,25,30,35,40]
+SR_amount = [2]
+SP_amount = [3]
 problems_amount = 1
-algorithm_type = ["DSRM"]  # 1 - RPA, 2 - DSRM / none
+algorithm_type = ["DSRM"]  # ["DSRM", "RPA"]
 solver_type = ["SOMAOP"]  # 1-SOMAOP 2-DCOP
 simulation_type = ["Abstract"]  # "Abstract", "CTTD"
-algorithm_version = [0,1] # [0, 1, 2, 3, 4, 5] 0: regular version, 1: SA, 3: incremental  4: full schedule, 5: full schedule one shote 2 - dumping not in use
-bid_type = [1]  # [1, 2, 3] 1 - coverage bid/ truncated, 2 - shapley, 3- simple
+algorithm_version = [0] # [0, 1, 2, 3, 4, 5] 0: regular version, 1: SA, 3: incremental  4: full schedule, 5: full schedule one shote 2 - dumping not in use
+bid_type = [1,3]  # [1, 2, 3] 1 - coverage bid/ truncated, 2 - shapley, 3- simple
 termination = 250  # termination for RPA
 
 # for DCOP privacy coherency
@@ -50,6 +50,7 @@ def solve_problems(in_problems):
         solver = create_synchronized_solver(problem)
         create_and_meet_mailer(solver.agents, problem.problem_id, solver)
         solver.execute_algorithm()
+        print("solve problem %s" % problem.problem_id)
         update_problem_utility_new_version(solver.total_util_over_NCLO)
         # update_problem_utility_over_NCLO(solver.total_util_over_NCLO)
 
@@ -88,7 +89,7 @@ def to_excel():
     globalNCLOsDF.to_excel(writer, sheet_name=sheet_global_utility, startcol=0, index=False)
     globalUtilityOverNCLODF.to_excel(writer, sheet_name=sheet_global_utility, startcol=1, index=False)
 
-    writer.save()
+    writer._save()
 
 
 
@@ -110,7 +111,7 @@ def  plot_chart():
 def initiate_df():
     columns = ['number_of_problems', 'number_of_providers', 'number_of_requesters', 'simulation_type']
     runInformation = pd.DataFrame(columns=columns)
-    runInformation = runInformation.append(pd.DataFrame([[problems_amount, SP, SR, simulation]]
+    runInformation = runInformation._append(pd.DataFrame([[problems_amount, SP, SR, simulation]]
                                                         , columns=columns), ignore_index=True)
     return runInformation
 
@@ -242,13 +243,13 @@ def update_final_utility_over_agents_amount():
     '''
     this method update the final utility for each problem size
     '''
-    
-    last_utility = global_utility_over_NCLO[algorithm][max(global_utility_over_NCLO[algorithm].keys())]#the last utility
-    problem_size = ('SR%sSP%s' %(SR_amount,SP_amount))
-    if algorithm not in final_utility_over_agents_amount.keys():
-        final_utility_over_agents_amount[algorithm]={}
-    else:
-        final_utility_over_agents_amount[algorithm][problem_size] = last_utility
+    if algorithm in global_utility_over_NCLO.keys():
+        last_utility = global_utility_over_NCLO[algorithm][max(global_utility_over_NCLO[algorithm].keys())]#the last utility
+        problem_size = ('SR%sSP%s' %(SR_amount,SP_amount))
+        if algorithm not in final_utility_over_agents_amount.keys():
+            final_utility_over_agents_amount[algorithm]={}
+        else:
+            final_utility_over_agents_amount[algorithm][problem_size] = last_utility
 
 
 
@@ -292,7 +293,6 @@ if __name__ == '__main__':
                         for algorithm in algorithm_type:
                             for version in algorithm_version:
                                 for bid in bid_type:
-
                                     algorithm = algorithm.split('_')[0] + '_' + str(version) + '_' + str(bid)
                                     if algorithm.startswith('DSRM_1'):
                                         continue
@@ -305,5 +305,4 @@ if __name__ == '__main__':
                                     solve_problems(in_problems=problems)
                             to_excel()
                         plot_chart()
-
-            update_final_utility_over_agents_amount()
+                    update_final_utility_over_agents_amount()

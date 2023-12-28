@@ -72,9 +72,6 @@ class ProviderLeaveRequesterEvent(Event):
 
 
 
-# Msg Class
-
-
 
 #----------------------------------------------------------------
 
@@ -102,12 +99,14 @@ class DSRM(SynchronizedSolverSOMAOP):
 
         while self.event_diary:
             self.event_diary = sorted(self.event_diary, key=lambda event: (event.arrival_time, event.importance))
+
+
             self.next_event = self.event_diary.pop(0)
             if sim_debug:
                 print("------------------", self.next_event, "------------------")
-                self.last_time = self.current_time
-                self.current_time = self.next_event.arrival_time
-
+            self.last_time = self.current_time
+            self.current_time = self.next_event.arrival_time
+            self.mailer.current_time = self.current_time
 
             if isinstance(self.next_event, InitializeSimulationEvent):
                 self.run_gale_shapley()
@@ -122,8 +121,8 @@ class DSRM(SynchronizedSolverSOMAOP):
                 # in the event that there are multiple leaving events at the same time - all leave before running alg
                 if not (self.event_diary and isinstance(self.event_diary[0], ProviderLeaveRequesterEvent) \
                         and self.event_diary[0].arrival_time == self.current_time):
-                    self.record_data()
-                    self.run_gale_shapley()
+                   self.record_data()
+                   self.run_gale_shapley()
                 continue
 
         self.handle_simulation_end_event()
@@ -137,6 +136,7 @@ class DSRM(SynchronizedSolverSOMAOP):
 
         # both types of agents left
         while self.still_has_algorithm_agents():
+            self.reset_requesters_offers_received()
             iteration = -1
 
             self.reset_requesters_for_GS()  # reset requester neighbors
@@ -165,16 +165,19 @@ class DSRM(SynchronizedSolverSOMAOP):
 
         for requester in self.all_requesters:
             requester.update_skills_received(self.current_time)
-            requester.update_time_per_skill_unit(self.current_time)
+            requester.update_time_per_skill_unit(self.current_time) # TODO needed??
             requester.reset_offers_received_by_skill()
 
     def remove_irrelevant_agents_for_algorithm(self):
         self.SRs = copy.copy(self.all_requesters)
         self.SPs = copy.copy(self.all_providers)
+        relevant_requesters = []
+        for provider in self.all_providers:
+            relevant_requesters += [sr for sr in provider.neighbors if self.get_agent_by_id(sr).max_time > provider.last_update_time]
 
         for requester in self.all_requesters:
             # not relevant time-wise anymore
-            if requester.max_time <= self.current_time:
+            if requester.getId() not in relevant_requesters:   #all_round_nehibor_skill
                 self.SRs.remove(requester)
                 self.remove_requester_neighbors(requester._id)
                 continue
@@ -183,10 +186,10 @@ class DSRM(SynchronizedSolverSOMAOP):
             for skill_needed, ability_needed in requester.sim_temp_temp_skills_needed.items():
                 if ability_needed > 0:
                     break
-        # otherwise remove him
-            else:
-                self.SRs.remove(requester)
-                self.remove_requester_neighbors(requester.id_)
+                # otherwise remove him
+                else:
+                    self.SRs.remove(requester)
+                    self.remove_requester_neighbors(requester._id)
 
         for provider in self.all_providers:
             for skill, ability in provider.skill_set.items():
@@ -196,6 +199,16 @@ class DSRM(SynchronizedSolverSOMAOP):
                 self.SPs.remove(provider)
                 self.remove_provider_neighbors(provider._id)
                 continue
+
+        # for requester in self.all_requesters:
+        #     for provider in self.all_providers:
+        #         for skill in provider.skill_set:
+        #             if requester.temp_simulation_entity.is_provider_needed(provider.temp_simulation_entity.get_max_capacity(), provider.t_now, skill):
+        #                 break
+        #             elif requester.getId() in provider.neighbors:
+        #                 provider.neighbors.remove(requester.getId())
+        #                 if len(provider.neighbors) == 0:
+        #                     self.SPs.remove(provider)
 
 
     def remove_requester_neighbors(self, sr_removed):
@@ -237,7 +250,7 @@ class DSRM(SynchronizedSolverSOMAOP):
     def requesters_react_to_msgs(self, iteration):
         for requester in self.all_requesters:
             if iteration == -1:
-                requester.initialize() # initialize
+                requester.initialize()  # initialize
             else:
                 requester.compute()
 
@@ -278,7 +291,6 @@ class DSRM(SynchronizedSolverSOMAOP):
                     to_remove.append(sp)
             sr.neighbors = [sp for sp in sr.neighbors if sp not in to_remove]
 
-
     def update_algorithm_agents(self):
         # remove providers that have been matched
         self.algorithm_providers = [sp for sp in self.SPs if sp.chosen_requester is None]
@@ -295,6 +307,10 @@ class DSRM(SynchronizedSolverSOMAOP):
             else:
                 to_remove.append(sp)
         self.SPs = [sp for sp in self.algorithm_providers if sp not in to_remove]
+
+    def reset_requesters_offers_received(self):
+        for sr in self.SRs:
+            sr.reset_offers_received_by_skill()
 
     def retrieve_events(self, initial_algorithm_requesters):
         self.event_diary = []
@@ -328,6 +344,9 @@ class DSRM(SynchronizedSolverSOMAOP):
         util = 0
         for sr in self.all_requesters:
             util += sr.final_utility()
+            if sim_debug:
+                print("SR: " + str(sr.getId()))
+                print(sr.simulation_times_for_utility)
 
         return util
 

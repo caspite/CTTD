@@ -30,8 +30,8 @@ class BidMessage(Msg):
     def __init__(self, sender_id, receiver_id, context):
         Msg.__init__(self, sender_id, receiver_id, context)
     def __str__(self):
-        return "Bid from " + str(self.sender_id) + " to " + str(self.receiver_id) + ": " + str \
-            (self.context)
+        return "Bid from " + str(self.sender) + " to " + str(self.receiver) + ": " + str \
+            (self.information)
 
 
 # RPA Offer Message
@@ -40,7 +40,7 @@ class OfferMessage(Msg):
         Msg.__init__(self, sender_id, receiver_id, context)
 
     def __str__(self):
-        return "RPAOfferMessage from " + str(self.sender) + " to " + str(self.receiver) + ": " + str \
+        return "OfferMessage from " + str(self.sender) + " to " + str(self.receiver) + ": " + str \
             (self.information)
 
 class ServiceProposalMsg(Msg):
@@ -126,7 +126,7 @@ class SR(Agent, ABC):
 
         self.util_j = {}  # {skill:{provider:utility}}
         self.bid_type = bid_type  # int index for bid type within an algorithm
-        self.skills_needed = self.simulation_entity.skills_requirements
+        self.skills_needed = copy.deepcopy(self.simulation_entity.skills_requirements)
         self.max_time = self.simulation_entity.max_time
         self.terminated = {}  # {skill:T\F}
         self.algorithm_version = algorithm_version
@@ -167,6 +167,7 @@ class SR(Agent, ABC):
 
     # reset offers by skill
     def reset_offers_received_by_skill(self):
+        self.offers_received_by_skill = {}
         for skill in self.skills_needed:
             self.offers_received_by_skill[skill] = []
 

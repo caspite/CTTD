@@ -134,9 +134,12 @@ class Requester(ServiceRequester):
         util_received = util_available * (offer.amount / self.skills_requirements[skill])
         return max(round(util_received, 2), 0)
 
-    def final_utility(self, allocated_offers=None, SP_view=None, cost = None, simulation_times= None):
+    def final_utility(self, allocated_offers=None, SP_view=None, cost=None, simulation_times=None):
         if simulation_times is None:
             simulation_times = self.create_simulation_times(allocated_offers, SP_view)
+        else:
+            simulation_times = {k: dict(sorted(v.items())) for k, v in simulation_times.items()}
+
         all_util = 0
         for skill, amount_needed in self.skills_requirements.items():
             if skill in simulation_times.keys():
@@ -165,7 +168,7 @@ class Requester(ServiceRequester):
                         break
 
                 all_util += util_received
-            # print("req",self.id_, "skill ", skill, "utility ", util_received)
+                # print("req",self._id, "skill ", skill, "utility ", util_received)
 
         if all_util < 0:
             return 0
@@ -226,9 +229,14 @@ class Requester(ServiceRequester):
                               self.time_per_skill_unit[service.skill])
         service.last_workload_use += self.time_per_skill_unit[service.skill] * skills_received
         service.last_workload_use = round(service.last_workload_use, 2)
+        self.skills_requirements[service.skill] -= skills_received
         return skills_received
 
-
+    def is_offer_relevant(self, offer):
+        if offer.skill in self. skills:
+            return True
+        else:
+            return False
     def get_care_time(self, skill,time):
         return self.time_per_skill_unit[skill]
 def update_unallocated(offers):
@@ -249,7 +257,8 @@ def cap(team, max_required):
 
     if team >= max_required:
         return 1
-
+    if max_required == 1:
+        return 1
     rate = 0.5/(max_required - 1)
     cap_outcome = 0.5 + rate * (team - 1)
 

@@ -3,6 +3,7 @@ from Solver.SOMAOP.BasicSOMAOP import *
 from SynchronizedAlgorithms.SynchronizedSolver import VariableAssignment
 import enum
 
+dbug = True
 class ProviderStatus(enum.Enum):
     at_requester = 1
     in_transport = 2
@@ -52,6 +53,8 @@ class DsrmSP(SP):
             msg = GSResponseMsg(self._id, sr, copy.deepcopy(best_choice))
             self.mailer.send_msg(msg)
 
+
+
     def compute_GS_response(self):
         utilities_for_options = {}
         if self.chosen_requester is not None:
@@ -66,6 +69,7 @@ class DsrmSP(SP):
 
         max_offer = max(utilities_for_options, key=utilities_for_options.get)
         return max_offer  # requester, skill tuple that provider wants to be sent to
+
     def send_service_proposal_msg(self):
         for requester in self.neighbors:
 
@@ -75,10 +79,13 @@ class DsrmSP(SP):
                     offer = VariableAssignment(self.getId(), requester, skill,
                                                 copy.deepcopy(self.neighbor_locations[requester]))
                     if isinstance(self.simulation_entity, MedicalUnit):
-                        offer.max_capacity = copy.deepcopy(self.simulation_entity.get_max_capacity())
+                        offer.max_capacity = copy.deepcopy(self.temp_simulation_entity.get_capacity())
+
                     travel_time = round(self.travel_time(self.location, self.neighbor_locations[requester]), 2)
-                    offer.arrival_time = travel_time
+                    offer.arrival_time = round(travel_time + self.last_update_time, 2)
                     offer.amount = self.skill_set[skill]
+                    offer.location = self.neighbor_locations[requester]
+                    offer.last_workload_use = offer.arrival_time
                     msg_value = ServiceProposalMsg(sender_id=self._id, receiver_id=requester,
                                             context=offer)
                     self.mailer.send_msg(msg_value)
@@ -105,21 +112,25 @@ class DsrmSP(SP):
     def update_skill_usage(self, current_time):
 
         if self.current_service is not None and self.current_service.arrival_time < current_time: # provider has already arrived
-            self.last_update_time, self.skill_set[self.current_service.skill]  = self.temp_simulation_entity.update_capacity(self.current_service, current_time)
+            self.last_update_time, self.skill_set[self.current_service.skill] = self.temp_simulation_entity.update_capacity(self.current_service, current_time)
 
             if self.skill_set[self.current_service.skill] == 0:
                 del self.skill_set[self.current_service.skill]
+                # todo - if finished current service need to be None?
+                self.current_service = None
 
     def update_location(self, current_time):
+
+
         if self.current_service is not None:
             arrival_location = self.current_service.location
 
             if self.status == ProviderStatus.at_requester:
-                self.current_location = arrival_location
+                self.location = arrival_location
 
             elif self.status == ProviderStatus.in_transport:
-                if self.current_location[0] == self.current_service.location[0] and \
-                        self.current_location[1] == self.current_service.location[1]:
+                if self.location[0] == self.current_service.location[0] and \
+                        self.location[1] == self.current_service.location[1]:
                     return
 
                 time_travel_begin = self.find_leaving_time()
@@ -130,33 +141,33 @@ class DsrmSP(SP):
                 ratio = find_ratio_of_travel_complete(time_travel_begin=time_travel_begin,
                                                       arrival_time=self.current_service.arrival_time,
                                                       current_time=current_time)
-                x_dist_ratio = abs((arrival_location[0] - self.current_location[0])) * ratio
-                y_dist_ratio = abs((arrival_location[1] - self.current_location[1])) * ratio
+                x_dist_ratio = abs((arrival_location[0] - self.location[0])) * ratio
+                y_dist_ratio = abs((arrival_location[1] - self.location[1])) * ratio
 
                 current_location = []
 
-                if self.current_location[0] < arrival_location[0]:
-                    current_location.append(round(self.current_location[0] + x_dist_ratio, 2))
+                if self.location[0] < arrival_location[0]:
+                    current_location.append(round(self.location[0] + x_dist_ratio, 2))
                 else:
-                    current_location.append(round(self.current_location[0] - x_dist_ratio, 2))
+                    current_location.append(round(self.location[0] - x_dist_ratio, 2))
 
-                if self.current_location[1] < arrival_location[1]:
-                    current_location.append(round(self.current_location[1] + y_dist_ratio, 2))
+                if self.location[1] < arrival_location[1]:
+                    current_location.append(round(self.location[1] + y_dist_ratio, 2))
                 else:
-                    current_location.append(round(self.current_location[1] - y_dist_ratio, 2))
+                    current_location.append(round(self.location[1] - y_dist_ratio, 2))
 
-                self.current_location = current_location
+                self.location = current_location
 
     def find_leaving_time(self):
         arrival_location = self.current_service.location
         arrival_time = self.current_service.arrival_time
 
-        x_dist_total = abs((arrival_location[0] - self.current_location[0]))
-        y_dist_total = abs((arrival_location[1] - self.current_location[1]))
+        x_dist_total = abs((arrival_location[0] - self.location[0]))
+        y_dist_total = abs((arrival_location[1] - self.location[1]))
 
         horizontal_dist_total = (x_dist_total ** 2 + y_dist_total ** 2) ** 0.5
 
-        time_travel_begin = round(arrival_time - (horizontal_dist_total / self.travel_speed), 2)
+        time_travel_begin = round(arrival_time - (horizontal_dist_total / self.simulation_entity.speed), 2)
 
         return time_travel_begin
 
@@ -192,6 +203,7 @@ class DsrmSR(SR):
         self.current_utility = 0
         self.time_per_skill_unit = {}
         self.temp_simulation_entity = copy.deepcopy(simulation_entity)
+        self.finished_offers = {}
 
 
         # ---- multiple round GS variables
@@ -220,6 +232,7 @@ class DsrmSR(SR):
     def reset_for_DSRM(self):
         self.reset_GS_accepted_providers()
         self.reset_GS_accepted_providers_utility()
+        self.reset_offers_received_by_skill()
         self.all_round_neighbor_skills = {}
 
     def reset_GS_accepted_providers(self):
@@ -266,8 +279,9 @@ class DsrmSR(SR):
 
     def reset_GS_has_offered(self):
         self.GS_has_offered = {}
-        for skill in self.skills_needed:
+        for skill in self.neighbors_by_skill:
             self.GS_has_offered[skill] = []
+            self.GS_has_not_offered[skill] = []
 
 
     def update_cap(self):
@@ -282,14 +296,13 @@ class DsrmSR(SR):
 
     def update_time_per_skill_unit(self, time):
         for skill in self.sim_temp_temp_skills_needed:
-           self.time_per_skill_unit[skill] = self.temp_simulation_entity.get_care_time(skill,time)
-
+           self.time_per_skill_unit[skill] = self.temp_simulation_entity.get_care_time(skill, time)
 
     def initialize(self):
         self.update_neighbors_by_skill()
-        self.update_cap() #update cup to be the minimum between number of neighbors & max cup
-
+        self.update_cap()  # update cap to be the minimum between number of neighbors & max cap
         self.reset_GS_has_offered()
+        self.update_relevant_offers()  # update the relevant offers according to approval SPs and not offered.
         self.GS_SP_choices = {}
 
         self.reset_util_j()
@@ -299,15 +312,14 @@ class DsrmSR(SR):
         self.calculate_utilities()
         self.send_utilities()
 
-        self.initialize_GS_has_not_offered() # all SPs that sent an offer
-        self.make_and_send_GS_offers()
+        self.initialize_GS_has_not_offered()  # all SPs that sent an offer
+        self.make_and_send_GS_offers()  # send for each sp the best skill offer
 
     # 2 - algorithm compute (single agent response to iteration)
     def compute(self):
         self.update_GS_needs()  # update temporary approvals
-
-        self.make_and_send_GS_offers()
-
+        if not self.check_termination():
+            self.make_and_send_GS_offers()
         self.GS_SP_choices = {}
 
     def update_GS_needs(self):
@@ -352,17 +364,20 @@ class DsrmSR(SR):
     # 4 - receive incoming information from neighbors
     def agent_receive_a_single_msg(self, msg):
         if isinstance(msg, ServiceProposalMsg):
-            self.offers_received_by_skill[msg.information.skill].append(msg.information)
-            for skill in self.skills_needed:
-                if msg.information.arrival_time+ self.mailer.current_time + self.time_per_skill_unit[skill] < self.max_time:
-                    if msg.sender not in self.neighbors: self.neighbors.append(msg.sender)
-                    if  msg.sender in self.neighbors_skill.keys() and \
-                    msg.information.skill not in self.neighbors_skill[msg.sender]:
-                        self.neighbors_skill[msg.sender].append(msg.information.skill)
-                    else:
-                        self.neighbors_skill[msg.sender] = []
-                        self.neighbors_skill[msg.sender].append(msg.information.skill)
-                    break
+            if msg.information.skill in self.skills_needed:
+
+                for skill in self.skills_needed:
+                    if msg.information.arrival_time+ self.time_per_skill_unit[skill] < self.max_time:
+                        if msg.information not in self.offers_received_by_skill[msg.information.skill]:
+                            self.offers_received_by_skill[msg.information.skill].append(msg.information)
+                        if msg.sender not in self.neighbors: self.neighbors.append(msg.sender)
+                        if  msg.sender in self.neighbors_skill.keys() and \
+                        msg.information.skill not in self.neighbors_skill[msg.sender]:
+                            self.neighbors_skill[msg.sender].append(msg.information.skill)
+                        else:
+                            self.neighbors_skill[msg.sender] = []
+                            self.neighbors_skill[msg.sender].append(msg.information.skill)
+                        break
 
             if msg.sender in self.all_round_neighbor_skills.keys():
                 self.all_round_neighbor_skills[msg.sender].append(msg.information.skill)
@@ -399,7 +414,8 @@ class DsrmSR(SR):
         if skill not in self.util_j:
             self.util_j[skill] = {}
         utilities_for_options = copy.deepcopy(self.util_j[skill])
-        to_remove = [sp for sp in utilities_for_options if sp not in self.GS_has_not_offered[skill]]
+        to_remove = [sp for sp in utilities_for_options if sp not in self.GS_has_not_offered[skill] or
+                     utilities_for_options[sp] == 0]
         for sp in to_remove:
             del utilities_for_options[sp]
 
@@ -439,7 +455,11 @@ class DsrmSR(SR):
         """
         for skill in self.skills_needed:
             for offer in self.offers_received_by_skill[skill]:
-               self.util_j[offer.skill][offer.provider] = self.calc_simple_bid(offer)
+                if skill in self.neighbors_by_skill:
+                    self.util_j[offer.skill][offer.provider] = self.calc_simple_bid(copy.deepcopy(offer))
+                    if self.util_j[offer.skill][offer.provider] == 0:
+                        del self.util_j[offer.skill][offer.provider]
+                        self.neighbors_by_skill[offer.skill].remove(offer.provider)
 
     def update_truncated_bids(self):
         """
@@ -447,25 +467,34 @@ class DsrmSR(SR):
         :return:
         """
         skill_needed = copy.deepcopy(self.skills_needed)
+        skill_needed ={key:value for key,value in skill_needed.items() if key in self.neighbors_by_skill.keys()}
         offers_to_allocate = copy.deepcopy(self.offers_received_by_skill)
-        allocated_offers, _ = self.temp_simulation_entity.allocated_offers(skill_needed, offers_to_allocate)
+        allocated_offers, self.NCLO = self.temp_simulation_entity.allocated_offers(skill_needed, offers_to_allocate)
         for skill in allocated_offers:
             for offer in allocated_offers[skill]:
-                    self.util_j[offer.skill][offer.provider] = self.simulation_entity.calc_converge_bid_to_offer(skill, offer)
-        #add not offered neighbors
-        for skill in self.offers_received_by_skill:
-            for offer in self.offers_received_by_skill[skill]:
-                neighbor = offer.provider
-                if neighbor not in self.util_j[skill]:
-                    self.util_j[skill][neighbor] = self.simulation_entity.utility_threshold_for_acceptance
+                offer_to_sent = {skill:[offer]}
+                self.util_j[offer.skill][offer.provider] = self.temp_simulation_entity.final_utility(offer_to_sent, cost = False)
+                if self.util_j[offer.skill][offer.provider] == 0:
+                    del self.util_j[offer.skill][offer.provider]
+                    if offer.provider in self.neighbors_by_skill[offer.skill]:
+                        self.neighbors_by_skill[offer.skill].remove(offer.provider)
 
+        # #add not offered neighbors
+        # for skill in self.offers_received_by_skill:
+        #     for offer in self.offers_received_by_skill[skill]:
+        #         if skill in self.neighbors_by_skill:
+        #             neighbor = offer.provider
+        #             if neighbor not in self.util_j[skill]:
+        #                 self.util_j[offer.skill][offer.provider] = self.calc_simple_bid(copy.deepcopy(offer))
+        #                 # self.util_j[skill][neighbor] = self.simulation_entity.utility_threshold_for_acceptance
 
     def calc_simple_bid(self, offer):
         bid = 0
         only_the_sp_offer = {offer.skill: [offer]}
         skills_needed_temp = {offer.skill: self.skills_needed[offer.skill]}
-        only_sp_allocated_offers, _ = self.temp_simulation_entity.allocated_offers(skills_needed_temp,
+        only_sp_allocated_offers, addNCLO = self.temp_simulation_entity.allocated_offers(skills_needed_temp,
                                                                               only_the_sp_offer)
+        self.NCLO += addNCLO
         utility_simple = self.temp_simulation_entity.final_utility(only_sp_allocated_offers, cost=False)
         bid = utility_simple
         return round(max(0, bid), 2)
@@ -475,7 +504,7 @@ class DsrmSR(SR):
         pass
 
     def final_utility(self):
-        return self.temp_simulation_entity.final_utility(simulation_times=self.simulation_times_for_utility)
+        return self.simulation_entity.final_utility(simulation_times=self.simulation_times_for_utility, allocated_offers=self.finished_offers)
 
 
 
@@ -549,11 +578,15 @@ class DsrmSR(SR):
         events = []
         # sp needs to leave
         for service in previous_services:
-            if service not in new_services:
+            if not self.is_in_new_service(service, new_services):
                 if service.arrival_time < current_time:
-                    leaving_event = ProviderLeaveRequesterEvent(arrival_time=current_time,
+                    # leaving_event = ProviderLeaveRequesterEvent(arrival_time=current_time,
+                    #                                             provider=service.provider, requester=self._id,
+                    #                                             skill=service.skill, mission=service.mission)
+
+                    leaving_event = ProviderLeaveRequesterEvent(arrival_time=service.last_workload_use,
                                                                 provider=service.provider, requester=self._id,
-                                                                skill=service.skill)
+                                                                skill=service.skill, mission=service.mission)
                     events.append(leaving_event)
 
             for skill in self.GS_accepted_providers:
@@ -565,6 +598,8 @@ class DsrmSR(SR):
 
         for service in new_services:
             is_continuing_service = [s for s in previous_services if s == service]
+            if service.last_workload_use is None or service.last_workload_use == 0.0:
+                service.last_workload_use = service.arrival_time
 
             if is_continuing_service and is_continuing_service[0].arrival_time < current_time:
                 provider_arrival_time = is_continuing_service[0].arrival_time
@@ -572,15 +607,17 @@ class DsrmSR(SR):
                 provider_leave_time = round(is_continuing_service[0].last_workload_use + provider_added_work_time, 2)
                 provider_amount = int(round((provider_leave_time - provider_arrival_time)
                                             / self.time_per_skill_unit[service.skill], 2))
-                service.amount = provider_amount
+                # service.amount = provider_amount
+                service.amount = len(service.mission)
                 service.arrival_time = provider_arrival_time
                 service.leaving_time = provider_leave_time
                 service.duration = round(service.leaving_time - service.arrival_time, 2)
                 service.last_workload_use = is_continuing_service[0].last_workload_use
 
+
                 leaving_event = ProviderLeaveRequesterEvent(arrival_time=service.leaving_time,
                                                             provider=service.provider, requester=self._id,
-                                                            skill=service.skill)
+                                                            skill=service.skill, mission=service.mission)
                 events.append(leaving_event)
 
             else:
@@ -660,17 +697,23 @@ class DsrmSR(SR):
     #
     #     return all_services
 
-    # todo - new version
+
     def retrieve_services(self):
         temp_skills_needed_temp = copy.deepcopy(self.sim_temp_temp_skills_needed)
         all_services = []
         accepted_offers = {}
         for skill in self.GS_accepted_providers:
-            accepted_offers[skill]  = [offer for offer  in self.offers_received_by_skill[skill] if offer.provider in \
+            accepted_offers[skill] = [offer for offer in self.offers_received_by_skill[skill] if offer.provider in \
             self.GS_accepted_providers[skill]]
         temp_skills_needed_temp = {skill: workload for skill, workload in temp_skills_needed_temp.items() if skill in accepted_offers.keys()}
-        offers, self.NCLO = self.temp_simulation_entity.allocated_offers(temp_skills_needed_temp,accepted_offers)
-        offers_list = [value for sublist in offers.values() for value in sublist]
+        offers, addNCLO = self.temp_simulation_entity.allocated_offers(temp_skills_needed_temp,accepted_offers)
+        offers = split_offers(offers)
+        self.NCLO += addNCLO
+        offers_list = [value for sublist in offers.values() for value in sublist if len(value.mission) > 0]
+        if dbug:
+            for offer in offers_list:
+                print(offer)
+
 
         return offers_list
 
@@ -684,10 +727,17 @@ class DsrmSR(SR):
             self.working_by_skill[skill] = []
 
         self.working_by_skill[skill].append(provider_id)
+        self.update_amount_working(skill, current_time)
         if current_time not in self.simulation_times_for_utility[skill]:
             self.simulation_times_for_utility[skill][current_time] = self.amount_working[skill]
-
         self.amount_working[skill] += 1
+
+    def update_amount_working(self, skill, current_time):
+        if skill in self.finished_offers:
+            for offer in self.finished_offers[skill]:
+                if offer.arrival_time < current_time and offer.leaving_time >= current_time:
+                    self.amount_working[skill] += 1
+
 
     def provider_leaves_requester(self, provider_id, skill, current_time):
         self.update_skills_received(current_time)
@@ -696,22 +746,88 @@ class DsrmSR(SR):
                                  if not (service.skill == skill and service.provider == provider_id)]
 
         self.working_by_skill[skill].remove(provider_id)
+        self.update_amount_working(skill, current_time)
 
         if current_time not in self.simulation_times_for_utility[skill]:
             self.simulation_times_for_utility[skill][current_time] = self.amount_working[skill]
-
-        self.amount_working[skill] -= 1
+        self.amount_working[skill] = 0
 
     def update_skills_received(self, current_time):
 
         for service in self.current_services:
-            if service.arrival_time <= current_time and service.last_workload_use < current_time:  # provider has already arrived
+            if service.arrival_time <= current_time and service.last_workload_use <= current_time:  # provider has already arrived
                 skills_received = self.temp_simulation_entity.reduce_skill_requirement(service, current_time)
-                self.sim_temp_temp_skills_needed[service.skill] -= skills_received
+                if skills_received > 0:
+                    self.update_finished_offers(copy.deepcopy(service), skills_received)
+                if service.skill in self.sim_temp_temp_skills_needed:
+                    self.sim_temp_temp_skills_needed[service.skill] -= skills_received
+                    self.skills_needed[service.skill] -= skills_received
 
-                if self.sim_temp_temp_skills_needed[service.skill] == 0:
-                    del self.sim_temp_temp_skills_needed[service.skill]
+                    if self.sim_temp_temp_skills_needed[service.skill] == 0:
+                        self.remove_skill_needed(service.skill)
+
+    def update_finished_offers(self, service, skills_received):
+        service.mission = service.mission[:skills_received]
+        if service.skill not in self.finished_offers:
+            self.finished_offers[service.skill] = []
+        self.finished_offers[service.skill].append(service)
+        service.leaving_time = skills_received*(service.duration/service.amount)+service.arrival_time
+        service.amount = skills_received
+        self.amount_working[service.skill] -= 1
+
+
+    def remove_skill_needed(self, skill):
+        del self.sim_temp_temp_skills_needed[skill]
+        del self.skills_needed[skill]
+        if skill in self.neighbors_by_skill.keys():
+            del self.neighbors_by_skill[skill]
+        for neighbor in self.neighbors_skill:
+            if skill in self.neighbors_skill[neighbor]:
+                self.neighbors_skill[neighbor].remove(skill)
+
+    def update_relevant_offers(self):
+        for skill in self.offers_received_by_skill:
+            for offer in self.offers_received_by_skill[skill]:
+                if skill in self.neighbors_by_skill:
+                    if skill not in self.GS_has_not_offered or skill not in self.GS_accepted_providers:
+                        continue
+                    else:
+                        if ((offer.provider in self.GS_has_not_offered[skill] or offer.provider in self.GS_accepted_providers[skill]))\
+                                or (not self.temp_simulation_entity.is_offer_relevant(offer)):
+                            self.offers_received_by_skill[skill].remove(offer)
+                            if offer.provider in self.neighbors_by_skill[skill]:
+                                self.neighbors_by_skill[skill].remove(offer.provider)
+    def is_in_new_service(self, service, new_services):
+        for ns in new_services:
+            if ns.provider == service.provider and ns.skill == service.skill:
+                return True
 
 
 def find_ratio_of_travel_complete(time_travel_begin, arrival_time, current_time):
-    return (current_time - time_travel_begin) / (arrival_time - time_travel_begin)
+    try:
+        return (current_time - time_travel_begin) / (arrival_time - time_travel_begin)
+    except:
+        return 1
+
+def split_offers(offers):
+    return_offers = {}
+    for skill in offers:
+        return_offers[skill] = []
+        for offer in offers[skill]:
+            if len(offer.mission) > 1:
+                for mission in offer.mission:
+                    if isinstance(mission, dict):
+                        new_offer = copy.deepcopy(offer)
+                        new_offer.mission = [copy.deepcopy(mission)]
+                        new_offer.arrival_time = mission['arrival_time']
+                        new_offer.duration = mission['duration']
+                        new_offer.leaving_time = mission['leaving_time']
+                        new_offer.amount = 1
+                        return_offers[skill].append(new_offer)
+                        break
+                    else:
+                        return_offers[skill].append(offer)
+                        break
+            else:
+                return_offers[skill].append(offer)
+    return return_offers
