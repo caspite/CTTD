@@ -9,7 +9,7 @@ from Simulator.CTTD.CttdSimulatorComponents import CttdSimulatorComponents
 from Solver.SolverAbstract import Mailer, Agent
 from SynchronizedAlgorithms.RPA.Main_RPA import RPA
 from SynchronizedAlgorithms.DSRM.Main_DSRM import DSRM
-#only for git checking
+
 dbug = True
 alfa = 0.7  # RPA dumping prop
 SR_amount = [2]
