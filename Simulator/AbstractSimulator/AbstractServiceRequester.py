@@ -89,7 +89,7 @@ class Requester(ServiceRequester):
             skill_offers_by_arrival = list(sorted(skill_offers_by_arrival, key=lambda offer: offer.arrival_time))
             q = min(self.max_required[skill], len(skill_offers_by_arrival))
             # NCLO
-            NCLO += super().number_of_comparisons(q, len(skill_offers_by_arrival))
+            NCLO += super().number_of_comparisons(q, len(skill_offers_by_arrival)) # todo - neighbors not skills
             offers_to_allocate = copy.copy(skill_offers_by_arrival[:q])
             unallocated_offers = copy.copy(skill_offers_by_arrival[q:])
             update_unallocated(unallocated_offers)  # skill_offers_by_arrival[q:]
@@ -133,6 +133,89 @@ class Requester(ServiceRequester):
         util_available = self.max_util[skill] + rate_of_util_fall * offer.arrival_time
         util_received = util_available * (offer.amount / self.skills_requirements[skill])
         return max(round(util_received, 2), 0)
+
+    def calc_simple_bid(self, offer):
+        skill = offer.skill
+        amount_neighbor_skill = offer.amount
+        if skill in self.skills_requirements:
+            skill_amount_needed = self.skills_requirements[skill]
+            if amount_neighbor_skill > skill_amount_needed:
+                amount_neighbor_skill = copy.deepcopy(skill_amount_needed)
+            rate_of_util_fall = ((- self.max_util[skill] / self.rate_util_fall) / self.max_time)
+            util_available = self.max_util[skill] - rate_of_util_fall * offer.arrival_time
+            best_util_received = util_available * (amount_neighbor_skill / skill_amount_needed)
+            return round(best_util_received, 2)
+        return 0
+
+    def calc_truncated_bids(self, offers,util_j, accepted_providers):
+        NCLO = 0
+        #sort offers by time arrival
+        # loop on all offers skills
+        for skill in self.skills_requirements.keys():
+            # max required is the minimum between max needed and offers sent
+            max_required = min(len(offers[skill]),self.max_required[skill])
+            # sort offers by time arrival
+            offers_by_arrival = list(sorted(offers[skill], key=lambda offer: offer.arrival_time))
+            # neighbors_considered = how many have we tried to include
+            neighbors_considered = []
+
+            # # dont need to give utility to agents other than the max needed
+            if len(accepted_providers[skill]) >= max_required:
+                continue
+
+            for offer in offers_by_arrival:
+                neighbor_id = offer.provider
+                # can do at least one unit or is already giving me service
+                if offer.arrival_time + self.time_per_skill_unit[skill] + self.last_time_updated \
+                        <= self.max_time:
+                    neighbors_considered.append(neighbor_id)
+                    util = self.get_util(neighbors_considered + list(accepted_providers[skill]), skill, offers_by_arrival)
+                    self.update_specific_utilities(neighbors_considered, skill, util, accepted_providers[skill], util_j)
+                    # NCLO
+                    NCLO += super().number_of_comparisons(1, len(offers[skill]))
+                    # will stop if we have all cap and also completed skill or we ran out of neighbors
+                    if len(neighbors_considered) + len(accepted_providers[skill]) >= \
+                            max_required:
+                        break
+        return NCLO
+
+    def get_util(self, neighbors_working_together, skill,offers):
+        util = self.max_util[skill]
+        total_skill = 0
+        total_travel_times = 0
+        for provider_id in neighbors_working_together:
+            offer = next(filter(lambda offer: offer.provider == provider_id, offers), None)
+            total_skill += offer.amount
+            total_travel_times += offer.arrival_time
+
+        if total_skill > self.skills_requirements[skill]:
+            total_skill = copy.deepcopy(self.skills_requirements[skill])
+
+        # skill cover factor
+        if total_skill / self.skills_requirements[skill] < 1:
+            util *= total_skill / self.skills_requirements[skill]
+
+        # penalty for delay * distance = utility lost for arrival
+        util -= self.penalty_for_delay * total_travel_times
+
+        # cap function
+        util *= cap(len(neighbors_working_together), self.max_required[skill])
+
+        return round(util, 2)
+
+    def update_specific_utilities(self, neighbors_considered, skill, util, accepted_providers, util_j):
+        number_sharing = len(neighbors_considered) + len(accepted_providers)
+
+        for neighbor in neighbors_considered:
+            if neighbor not in util_j[skill]:
+                util_j[skill][neighbor] = 0
+
+            if util_j[skill][neighbor] < round(util / number_sharing, 2):
+                util_j[skill][neighbor] = round(util / number_sharing, 2)
+            else:
+                util -= util_j[skill][neighbor]
+                number_sharing -= 1
+
 
     def final_utility(self, allocated_offers=None, SP_view=None, cost=None, simulation_times=None):
         if simulation_times is None:

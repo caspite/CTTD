@@ -171,6 +171,7 @@ class SR(Agent, ABC):
         for skill in self.skills_needed:
             self.offers_received_by_skill[skill] = []
 
+
     # utility methods
     def calculate_current_utility(self):
         self.simulation_entity.calculate_current_utility()

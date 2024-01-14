@@ -386,6 +386,14 @@ class DisasterSite(ServiceRequester, ABC):
             else:
                 return 0
 
+    def calc_simple_bid(self, offer):
+        bid = 0
+        only_the_sp_offer = {offer.skill: [offer]}
+        skills_needed_temp = {offer.skill: self.skills_requirements[offer.skill]}
+        only_sp_allocated_offers, _ = self.allocated_offers(skills_needed_temp, only_the_sp_offer)
+        utility_simple = self.final_utility(only_sp_allocated_offers, cost=False)
+        bid = utility_simple
+        return round(max(0, bid), 2)
     def create_survival_dict_by_schedule(self, casualties_schedule):
         """
         :param casualties_schedule: {cas_id:{skill:start_time}}

@@ -5,7 +5,7 @@ from SynchronizedAlgorithms.DSRM.DSRM_agents import DsrmSP, DsrmSR
 from SynchronizedAlgorithms.SynchronizedSolver import SynchronizedSolverSOMAOP, VariableAssignment
 
 
-sim_debug = True
+sim_debug = False
 algorithm_outcome_debug = False
 
 # events classes----------------------------------------------------------------
@@ -136,7 +136,7 @@ class DSRM(SynchronizedSolverSOMAOP):
 
         # both types of agents left
         while self.still_has_algorithm_agents():
-            self.reset_requesters_offers_received()
+            self.remove_unaccepted_offers()
             iteration = -1
 
             self.reset_requesters_for_GS()  # reset requester neighbors
@@ -308,9 +308,9 @@ class DSRM(SynchronizedSolverSOMAOP):
                 to_remove.append(sp)
         self.SPs = [sp for sp in self.algorithm_providers if sp not in to_remove]
 
-    def reset_requesters_offers_received(self):
+    def remove_unaccepted_offers(self):
         for sr in self.SRs:
-            sr.reset_offers_received_by_skill()
+            sr.remove_unaccepted_offers()
 
     def retrieve_events(self, initial_algorithm_requesters):
         self.event_diary = []

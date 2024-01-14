@@ -19,7 +19,7 @@ algorithm_type = ["DSRM"]  # ["DSRM", "RPA"]
 solver_type = ["SOMAOP"]  # 1-SOMAOP 2-DCOP
 simulation_type = ["Abstract"]  # "Abstract", "CTTD"
 algorithm_version = [0] # [0, 1, 2, 3, 4, 5] 0: regular version, 1: SA, 3: incremental  4: full schedule, 5: full schedule one shote 2 - dumping not in use
-bid_type = [1,3]  # [1, 2, 3] 1 - coverage bid/ truncated, 2 - shapley, 3- simple
+bid_type = [3]  # [1, 2, 3] 1 - coverage bid/ truncated, 2 - shapley, 3- simple
 termination = 250  # termination for RPA
 
 # for DCOP privacy coherency
@@ -47,12 +47,11 @@ def create_new_problem(problem_id):
 # create solver for each problem and solve
 def solve_problems(in_problems):
     for problem in in_problems:
-        solver = create_synchronized_solver(problem)
+        solver = create_synchronized_solver(problem) #  todo
         create_and_meet_mailer(solver.agents, problem.problem_id, solver)
         solver.execute_algorithm()
         print("solve problem %s" % problem.problem_id)
         update_problem_utility_new_version(solver.total_util_over_NCLO)
-        # update_problem_utility_over_NCLO(solver.total_util_over_NCLO)
 
 
 def create_synchronized_solver(problem):
@@ -63,7 +62,8 @@ def create_synchronized_solver(problem):
         if algorithm.split("_")[0] == "DSRM":
             return DSRM(problem_id=problem.problem_id, providers=problem.providers, requesters=problem.requesters,
                        bid_type=bid, algorithm_version=version)
-
+        if algorithm.split("_")[0] == "FMC_TA":
+            pass
 
 def create_and_meet_mailer(agents: [Agent], problem_id, solver):
     mailer = Mailer(problem_id=problem_id, agents=agents)
@@ -226,7 +226,7 @@ def update_global_util_for_all_NCLOs_new_ver():
             utility = float(utility)
             for next_NCLO in copy.copy(all_NCLOs_list):
                 if next_NCLO < NCLO:
-                    new_dict[next_NCLO] = last_utility
+                    new_dict[next_NCLO] =  max(last_utility, utility) # todo edit if needed
                     all_NCLOs_list.remove(next_NCLO)
                 elif next_NCLO == NCLO:
                     new_dict[next_NCLO] = utility  # / problems_amount

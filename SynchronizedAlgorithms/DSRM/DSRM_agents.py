@@ -302,13 +302,10 @@ class DsrmSR(SR):
         self.update_neighbors_by_skill()
         self.update_cap()  # update cap to be the minimum between number of neighbors & max cap
         self.reset_GS_has_offered()
-        self.update_relevant_offers()  # update the relevant offers according to approval SPs and not offered.
+        self.update_relevant_offers()  #  todo update the relevant offers according to approval SPs and not offered. fix this! not needed and fix the simple bid accurdingly
         self.GS_SP_choices = {}
-
         self.reset_util_j()
-
         self.update_terminated()
-
         self.calculate_utilities()
         self.send_utilities()
 
@@ -360,6 +357,14 @@ class DsrmSR(SR):
         for neighbor in offers_by_neighbor:
             msg = OfferMessage(self._id, neighbor, offers_by_neighbor[neighbor])
             self.mailer.send_msg(msg)
+
+    def remove_unaccepted_offers(self):
+        for skill in self.offers_received_by_skill:
+            to_keep = copy.deepcopy(self.offers_received_by_skill[skill])
+            for offer in self.offers_received_by_skill[skill]:
+                if offer.provider not in self.GS_accepted_providers[skill]:
+                    to_keep.remove(offer)
+            self.offers_received_by_skill[skill] = to_keep
 
     # 4 - receive incoming information from neighbors
     def agent_receive_a_single_msg(self, msg):
@@ -456,7 +461,9 @@ class DsrmSR(SR):
         for skill in self.skills_needed:
             for offer in self.offers_received_by_skill[skill]:
                 if skill in self.neighbors_by_skill:
-                    self.util_j[offer.skill][offer.provider] = self.calc_simple_bid(copy.deepcopy(offer))
+                    self.util_j[offer.skill][offer.provider] = self.temp_simulation_entity.calc_simple_bid(copy.deepcopy(offer)) #  todo move def to simulation entity
+                    self.NCLO += super().number_of_comparisons(1, len(self.neighbors))
+
                     if self.util_j[offer.skill][offer.provider] == 0:
                         del self.util_j[offer.skill][offer.provider]
                         self.neighbors_by_skill[offer.skill].remove(offer.provider)
@@ -464,40 +471,24 @@ class DsrmSR(SR):
     def update_truncated_bids(self):
         """
         update self.util_j
-        :return:
+        :return: none
         """
-        skill_needed = copy.deepcopy(self.skills_needed)
-        skill_needed ={key:value for key,value in skill_needed.items() if key in self.neighbors_by_skill.keys()}
-        offers_to_allocate = copy.deepcopy(self.offers_received_by_skill)
-        allocated_offers, self.NCLO = self.temp_simulation_entity.allocated_offers(skill_needed, offers_to_allocate)
-        for skill in allocated_offers:
-            for offer in allocated_offers[skill]:
-                offer_to_sent = {skill:[offer]}
-                self.util_j[offer.skill][offer.provider] = self.temp_simulation_entity.final_utility(offer_to_sent, cost = False)
-                if self.util_j[offer.skill][offer.provider] == 0:
-                    del self.util_j[offer.skill][offer.provider]
-                    if offer.provider in self.neighbors_by_skill[offer.skill]:
-                        self.neighbors_by_skill[offer.skill].remove(offer.provider)
+        self.NCLO += self.temp_simulation_entity.calc_truncated_bids(copy.deepcopy(self.offers_received_by_skill), self.util_j, self.GS_accepted_providers)
 
-        # #add not offered neighbors
-        # for skill in self.offers_received_by_skill:
-        #     for offer in self.offers_received_by_skill[skill]:
-        #         if skill in self.neighbors_by_skill:
-        #             neighbor = offer.provider
-        #             if neighbor not in self.util_j[skill]:
-        #                 self.util_j[offer.skill][offer.provider] = self.calc_simple_bid(copy.deepcopy(offer))
-        #                 # self.util_j[skill][neighbor] = self.simulation_entity.utility_threshold_for_acceptance
 
-    def calc_simple_bid(self, offer):
-        bid = 0
-        only_the_sp_offer = {offer.skill: [offer]}
-        skills_needed_temp = {offer.skill: self.skills_needed[offer.skill]}
-        only_sp_allocated_offers, addNCLO = self.temp_simulation_entity.allocated_offers(skills_needed_temp,
-                                                                              only_the_sp_offer)
-        self.NCLO += addNCLO
-        utility_simple = self.temp_simulation_entity.final_utility(only_sp_allocated_offers, cost=False)
-        bid = utility_simple
-        return round(max(0, bid), 2)
+        # skill_needed = copy.deepcopy(self.skills_needed)
+        # skill_needed ={key:value for key,value in skill_needed.items() if key in self.neighbors_by_skill.keys()}
+        # # todo add new def to simulation entity - get the offers. util j and update the util_j in DS
+        # offers_to_allocate = copy.deepcopy(self.offers_received_by_skill)
+        # allocated_offers, self.NCLO = self.temp_simulation_entity.allocated_offers(skill_needed, offers_to_allocate)
+        # for skill in allocated_offers:
+        #     for offer in allocated_offers[skill]:
+        #         offer_to_sent = {skill:[offer]}
+        #         self.util_j[offer.skill][offer.provider] = self.temp_simulation_entity.final_utility(offer_to_sent, cost = False)
+        #         if self.util_j[offer.skill][offer.provider] == 0:
+        #             del self.util_j[offer.skill][offer.provider]
+        #             if offer.provider in self.neighbors_by_skill[offer.skill]:
+        #                 self.neighbors_by_skill[offer.skill].remove(offer.provider)
 
 
     def send_msgs(self):
