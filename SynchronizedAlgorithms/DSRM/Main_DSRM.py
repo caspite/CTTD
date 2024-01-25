@@ -5,7 +5,8 @@ from SynchronizedAlgorithms.DSRM.DSRM_agents import DsrmSP, DsrmSR
 from SynchronizedAlgorithms.SynchronizedSolver import SynchronizedSolverSOMAOP, VariableAssignment
 
 
-sim_debug = False
+
+sim_debug = True
 algorithm_outcome_debug = False
 
 # events classes----------------------------------------------------------------
@@ -96,7 +97,8 @@ class DSRM(SynchronizedSolverSOMAOP):
         self.event_diary.append(InitializeSimulationEvent(0))
 
     def execute_algorithm(self):
-
+        if sim_debug:
+            self.print_remaining_resources()
         while self.event_diary:
             self.event_diary = sorted(self.event_diary, key=lambda event: (event.arrival_time, event.importance))
 
@@ -126,6 +128,10 @@ class DSRM(SynchronizedSolverSOMAOP):
                 continue
 
         self.handle_simulation_end_event()
+        if sim_debug:
+            self.print_remaining_resources()
+
+
 #this is a check
     #start iteration of the
     def run_gale_shapley(self):
@@ -165,6 +171,7 @@ class DSRM(SynchronizedSolverSOMAOP):
 
         for requester in self.all_requesters:
             requester.update_skills_received(self.current_time)
+            requester.reset_amount_of_working()
             requester.update_time_per_skill_unit(self.current_time) # TODO needed??
             requester.reset_offers_received_by_skill()
 
@@ -241,14 +248,14 @@ class DSRM(SynchronizedSolverSOMAOP):
         return True  # only if they all terminated
 
     def providers_react_to_msgs(self, iteration):
-        for provider in self.all_providers:
+        for provider in self.SPs: #self.all_providers:
             if iteration == -1:
                 provider.initialize()
             else:
                 provider.compute()
 
     def requesters_react_to_msgs(self, iteration):
-        for requester in self.all_requesters:
+        for requester in self.SRs: #self.all_requesters:
             if iteration == -1:
                 requester.initialize()  # initialize
             else:
@@ -344,9 +351,9 @@ class DSRM(SynchronizedSolverSOMAOP):
         util = 0
         for sr in self.all_requesters:
             util += sr.final_utility()
-            if sim_debug:
-                print("SR: " + str(sr.getId()))
-                print(sr.simulation_times_for_utility)
+            # if sim_debug:
+            #     print("SR: " + str(sr.getId()))
+            #     print(sr.simulation_times_for_utility)
 
         return util
 
@@ -360,3 +367,9 @@ class DSRM(SynchronizedSolverSOMAOP):
                for requester in simulation_requester_entities]
         return SRs
 
+    def print_remaining_resources(self):
+        for sp in self.all_providers:
+            print("P: %s remaining skills: %s" % (sp._id, sp.skill_set))
+
+        for sr in self.all_requesters:
+            print("R: %s remaining skills: %s" % (sr._id, sr.skills_needed))

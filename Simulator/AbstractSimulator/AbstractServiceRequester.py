@@ -142,7 +142,7 @@ class Requester(ServiceRequester):
             if amount_neighbor_skill > skill_amount_needed:
                 amount_neighbor_skill = copy.deepcopy(skill_amount_needed)
             rate_of_util_fall = ((- self.max_util[skill] / self.rate_util_fall) / self.max_time)
-            util_available = self.max_util[skill] - rate_of_util_fall * offer.arrival_time
+            util_available = self.max_util[skill] + rate_of_util_fall * offer.arrival_time # todo!!! check
             best_util_received = util_available * (amount_neighbor_skill / skill_amount_needed)
             return round(best_util_received, 2)
         return 0
@@ -151,7 +151,9 @@ class Requester(ServiceRequester):
         NCLO = 0
         #sort offers by time arrival
         # loop on all offers skills
-        for skill in self.skills_requirements.keys():
+        for skill in offers.keys():
+            if skill not in accepted_providers.keys():
+                accepted_providers[skill] = set()
             # max required is the minimum between max needed and offers sent
             max_required = min(len(offers[skill]),self.max_required[skill])
             # sort offers by time arrival
@@ -159,24 +161,23 @@ class Requester(ServiceRequester):
             # neighbors_considered = how many have we tried to include
             neighbors_considered = []
 
-            # # dont need to give utility to agents other than the max needed
+            # dont need to give utility to agents other than the max needed
             if len(accepted_providers[skill]) >= max_required:
                 continue
 
             for offer in offers_by_arrival:
                 neighbor_id = offer.provider
                 # can do at least one unit or is already giving me service
-                if offer.arrival_time + self.time_per_skill_unit[skill] + self.last_time_updated \
-                        <= self.max_time:
-                    neighbors_considered.append(neighbor_id)
-                    util = self.get_util(neighbors_considered + list(accepted_providers[skill]), skill, offers_by_arrival)
-                    self.update_specific_utilities(neighbors_considered, skill, util, accepted_providers[skill], util_j)
-                    # NCLO
-                    NCLO += super().number_of_comparisons(1, len(offers[skill]))
-                    # will stop if we have all cap and also completed skill or we ran out of neighbors
-                    if len(neighbors_considered) + len(accepted_providers[skill]) >= \
-                            max_required:
-                        break
+                # if offer.arrival_time + self.time_per_skill_unit[skill] <= self.max_time:
+                neighbors_considered.append(neighbor_id)
+                util = self.get_util(neighbors_considered + list(accepted_providers[skill]), skill, offers_by_arrival)
+                self.update_specific_utilities(neighbors_considered, skill, util, accepted_providers[skill], util_j)
+                # NCLO
+                NCLO += super().number_of_comparisons(1, len(offers[skill]))
+                # will stop if we have all cap and also completed skill or we ran out of neighbors
+                all_considerd = list(set(neighbors_considered).union(accepted_providers[skill]))
+                if len(all_considerd) >= max_required:
+                    break
         return NCLO
 
     def get_util(self, neighbors_working_together, skill,offers):
@@ -233,8 +234,8 @@ class Requester(ServiceRequester):
                 total_amount_complete = 0
                 for time, amount_working in simulation_times[skill].items():
                     time_elapsed = time - last_time
-                    skills_complete = min(amount_needed - total_amount_complete,
-                                          time_elapsed / self.time_per_skill_unit[skill])
+                    skills_complete = round(min(amount_needed - total_amount_complete,
+                                          time_elapsed / self.time_per_skill_unit[skill]),2)
 
                     if amount_working == 0:  # no service given in this time frame - util is lost
                         util_available += rate_of_util_fall * time_elapsed
@@ -304,8 +305,7 @@ class Requester(ServiceRequester):
 
 
     def update_cap(self, skill, workload):
-        if self.max_required[skill] > workload:
-            self.max_required[skill] = workload
+        pass
 
     def reduce_skill_requirement(self, service, current_time):
         skills_received = int(round(current_time - service.last_workload_use, 2) /
