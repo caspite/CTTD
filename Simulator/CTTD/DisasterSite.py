@@ -172,8 +172,13 @@ class DisasterSite(ServiceRequester, ABC):
             #         print('bug')
             casualties_needed_skill = [(cas, value[1]) for cas, value in casualties_to_allocate.items() if
                                        value[0][0] == skill]
+            # all offers capacities
+            capacities = {} # offer_p_id : capacity
             # while more casualties to allocate and offers available
             while offers_skill_available_dict:
+
+                if len(casualties_needed_skill) <=0:
+                    break
 
                 # order offers by next skill unit work start
                 offers_skill_available_dict = dict(sorted(offers_skill_available_dict.items(),
@@ -182,8 +187,11 @@ class DisasterSite(ServiceRequester, ABC):
                 NCLO += super().number_of_comparisons(1, len(offers_skill_available_dict))
                 # the next offer to allocate
                 offer_stats = next(iter(offers_skill_available_dict.items()))
-                offer_capacity = list(copy.copy(offer_stats[0].max_capacity))
-                offer_stats[0].max_capacity = 0
+                if offer_stats[0].provider not in capacities:
+                    capacities[offer_stats[0].provider] = list(copy.copy(offer_stats[0].max_capacity))
+                    offer_stats[0].max_capacity = 0
+                offer_capacity = capacities[offer_stats[0].provider]
+
 
                 # while provider have more skills to offer
                 while offers_skill_available_dict.keys().__contains__(offer_stats[0])  and len(casualties_needed_skill) > 0:
@@ -207,6 +215,7 @@ class DisasterSite(ServiceRequester, ABC):
                         if (next_casualty is None) or (offer_capacity[1] - capacity_to_reduce < 0):
                             del offers_skill_available_dict[offer_stats[0]]
                             offer_stats[0].amount = 0
+                            break
 
                         else:
                             start_time = max(next_time, next_casualty[1])
@@ -234,15 +243,17 @@ class DisasterSite(ServiceRequester, ABC):
 
                             # capacities[offer_stats[0].provider][1] -= capacity_to_reduce
                             offer_stats[0].max_capacity += capacity_to_reduce
+                            offer_stats[0].arrival_time = leaving_time
                             offer_capacity[1] -= capacity_to_reduce
+                            break
                     elif offer_capacity[1] <= 0 or offer_stats[1][0] <= 0:
                         del offers_skill_available_dict[offer_stats[0]]
                         offer_stats[0].amount = 0
 
-                if offer_stats[0] not in allocated_offers[skill]:
+                if offer_stats[0] not in allocated_offers[skill] and len(offer_stats[0].mission) > 0:
                     allocated_offers[skill].add(offer_stats[0])
-                    if offers_skill_available_dict.__contains__(offer_stats[0]):
-                        del offers_skill_available_dict[offer_stats[0]]
+                    # if offers_skill_available_dict.__contains__(offer_stats[0]):
+                    #     del offers_skill_available_dict[offer_stats[0]]
 
         update_offers_times(allocated_offers)
         return allocated_offers, NCLO
@@ -325,7 +336,7 @@ class DisasterSite(ServiceRequester, ABC):
             if triage in agent_capabilities.keys() and value[0][0] == skill:
                 workload = agent_capabilities[triage]
             if workload > 0:
-                return [casualty,max(arrival_time, value[1])]
+                return [casualty, max(arrival_time, value[1])]
         return None
 
     @staticmethod
@@ -394,6 +405,31 @@ class DisasterSite(ServiceRequester, ABC):
         utility_simple = self.final_utility(only_sp_allocated_offers, cost=False)
         bid = utility_simple
         return round(max(0, bid), 2)
+
+    def calc_truncated_bids(self, offers, util_j, GS_accepted_providers, neighbors):
+        skill_needed ={}
+        for skill in offers:
+            to_keep = []
+            for offer in offers[skill]:
+                if self.is_provider_needed(offer.max_capacity[0], offer.arrival_time, offer.skill):
+                    to_keep.append(offer)
+                else:
+                    util_j[skill][offer.provider] = 0
+            offers[skill] = to_keep
+            skill_needed[skill] = self.skills_requirements[skill]
+
+        self.offers_that_where_allocated = {}
+        NCLO = 0
+        allocated_offers, NCLO = self.allocated_offers(copy.deepcopy(skill_needed), offers)
+        self.offers_that_where_allocated = allocated_offers
+
+        for skill in allocated_offers:
+            for offer in allocated_offers[skill]:
+                offer_to_sent = {skill:[offer]}
+                util = self.final_utility(offer_to_sent, cost = False)
+                if util >= self.utility_threshold_for_acceptance and skill in util_j.keys():
+                    util_j[offer.skill][offer.provider] = util
+        return NCLO
     def create_survival_dict_by_schedule(self, casualties_schedule):
         """
         :param casualties_schedule: {cas_id:{skill:start_time}}
@@ -456,7 +492,6 @@ class DisasterSite(ServiceRequester, ABC):
     def calc_converge_bid_to_offer(self, skill, offer):
         """
         :param skill:
-        :param skill:
         :param offer:
         :param bid_type:
         :return: bid for the offer
@@ -464,7 +499,6 @@ class DisasterSite(ServiceRequester, ABC):
 
         bid = 0
         if len(offer.mission) > 0:
-
 
             # minimum_cas = max(offer.mission, key=lambda x:
             # x['mission'].survival_by_time(x['arrival_time']))
@@ -475,11 +509,7 @@ class DisasterSite(ServiceRequester, ABC):
             minimum_cas = min(offer.mission, key=lambda x:
             x['arrival_time'])
 
-
-            bid = round(minimum_cas['mission'].get_potential_survival_by_start_time(
-                0.0), 2)
-
-
+            bid = round(minimum_cas['mission'].get_potential_survival_by_start_time(0.0), 2)
 
         return round(max(0,bid),2)
 
@@ -500,12 +530,23 @@ class DisasterSite(ServiceRequester, ABC):
         copy_object.near_hospital = copy.deepcopy(self.near_hospital)
         return copy_object
 
-    def is_offer_relevant(self, offer):
-            if self.next_casualty(copy.deepcopy(self.casualties_needed_activities), offer.skill, offer.arrival_time, offer.max_capacity[0]) is not None:
-                return True
-            else:
-                return False
 
+    def is_offer_relevant_according_to_accepted_offers(self, offer, accepted_offers):
+        needed_cas = copy.deepcopy(self.casualties_needed_activities)
+        needed_cas = {key: [value, 0.0] for key, value in needed_cas.items()}
+
+        for ac_offer in accepted_offers:
+            for accepted_offer in self.offers_that_where_allocated[offer.skill]:
+                if ac_offer.provider == accepted_offer.provider:
+                    for mission in accepted_offer.mission:
+                        if (mission['mission'].get_id() in self.casualties_needed_activities and
+                                self.casualties_needed_activities[mission['mission'].get_id()][0] == accepted_offer.skill):
+                            needed_cas[mission['mission'].get_id()][0].popleft()
+        if self.next_casualty(needed_cas, offer.skill, offer.arrival_time,
+                              offer.max_capacity[0]) is not None:
+            return True
+        else:
+            return False
     def is_provider_needed(self, max_capacity, arrival_time, skill):
         casualties_to_allocate = copy.deepcopy(self.casualties_needed_activities)
         casualties_to_allocate = {key: [value, 0.0] for key, value in casualties_to_allocate.items()}
@@ -515,6 +556,10 @@ class DisasterSite(ServiceRequester, ABC):
         else:
             return False
 
-        # todo check all skills and chek if thier is nect casualty
+    def get_max_required(self):
+        max_required = {}
+        for skill in self.max_required:
+            max_required[skill] = int(self.max_required[skill])
+        return max_required
 
 

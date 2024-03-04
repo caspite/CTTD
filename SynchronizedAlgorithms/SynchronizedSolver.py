@@ -9,7 +9,7 @@ dbug = True
 
 class VariableAssignment:
     def __init__(self, provider=None, requester=None, skill=None, location=None, amount=None, duration=0.0, arrival_time=None, leaving_time=None,
-                 utility=None, mission=None, max_capacity=None, original_object=None, accept=False, last_workload_use=0.0):
+                 utility=None, mission=None, max_capacity=None, original_object=None, accept=False, last_workload_use=0.0,travel_time=0.0):
         if original_object is not None: #todo remove
             self.copy_constructor(original_object)
             return
@@ -26,6 +26,7 @@ class VariableAssignment:
         self.max_capacity = max_capacity
         self.accept = accept  # has offers accept - for incremental version
         self.last_workload_use = last_workload_use # the last time that the workload has been done
+        self.travel_time = travel_time
         if mission is None:
             self.mission = []
         else:
@@ -47,6 +48,7 @@ class VariableAssignment:
         self.accept = original.accept
         self.last_workload_use = original.last_workload_use
         self.location = copy.deepcopy(original.location)
+        self.travel_time = copy.deepcopy(original.travel_time)
 
 
     def accept_offer(self):
@@ -78,7 +80,7 @@ class VariableAssignment:
                                          location=self.location, amount=self.amount, duration=self.duration,
                                          arrival_time=self.arrival_time, leaving_time=self.leaving_time,
                                          utility=self.utility,mission=copy.deepcopy(self.mission),
-                                         max_capacity=copy.deepcopy(self.max_capacity), accept=self.accept, last_workload_use=self.last_workload_use)
+                                         max_capacity=copy.deepcopy(self.max_capacity), accept=self.accept, last_workload_use=self.last_workload_use, travel_time=copy.deepcopy(self.travel_time))
         return copy_object
 
 

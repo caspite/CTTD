@@ -97,6 +97,7 @@ class DSRM(SynchronizedSolverSOMAOP):
         self.event_diary.append(InitializeSimulationEvent(0))
 
     def execute_algorithm(self):
+        self.record_data()
         if sim_debug:
             self.print_remaining_resources()
         while self.event_diary:
@@ -262,16 +263,15 @@ class DSRM(SynchronizedSolverSOMAOP):
                 requester.compute()
 
     def update_requester_neighbors(self):
+
         # remove skills that have reached cap
         for sr in self.SRs:
             neighbors_by_skill_temp = copy.deepcopy(sr.neighbors_by_skill)
-
             for skill in sr.neighbors_by_skill.keys():
                 if len(sr.GS_accepted_providers[skill]) >= sr.sim_temp_max_required[skill]:
                     del neighbors_by_skill_temp[skill]
-
-
             sr.neighbors_by_skill = neighbors_by_skill_temp
+
 
         # remove neighbors that have been matched
         for sr in self.SRs:
@@ -291,12 +291,22 @@ class DSRM(SynchronizedSolverSOMAOP):
         for sr in self.SRs:
             to_remove = []
             for sp in sr.neighbors:
-                for skill in sr.neighbors_by_skill:
-                    if sp in sr.neighbors_by_skill[skill]:
-                        break
-                else:
+                for skill in sr.skills_needed:
+                    if skill in sr.util_j.keys():
+                        if sp in sr.util_j[skill].keys():
+                            if sr.util_j[skill][sp] <= sr.simulation_entity.utility_threshold_for_acceptance:
+                                if skill in sr.neighbors_by_skill.keys():
+                                    sr.neighbors_by_skill[skill].remove(sp)
+                    if skill in sr.neighbors_by_skill.keys():
+                        if sp in sr.neighbors_by_skill[skill]:
+                            break
+                        else:
+                            to_remove.append(sp)
+                if sp not in [neighbor for skill in sr.neighbors_by_skill for neighbor in sr.neighbors_by_skill[skill]]:
                     to_remove.append(sp)
             sr.neighbors = [sp for sp in sr.neighbors if sp not in to_remove]
+
+
 
     def update_algorithm_agents(self):
         # remove providers that have been matched

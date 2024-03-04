@@ -12,14 +12,14 @@ from SynchronizedAlgorithms.DSRM.Main_DSRM import DSRM
 
 dbug = True
 alfa = 0.7  # RPA dumping prop
-SR_amount = [2]
-SP_amount = [3]
-problems_amount = 1
-algorithm_type = ["DSRM"]  # ["DSRM", "RPA"]
+SR_amount = [3,5,10]
+SP_amount = [5,10,15]
+problems_amount = 10
+algorithm_type = ["DSRM", "RPA"]  # ["DSRM", "RPA"]
 solver_type = ["SOMAOP"]  # 1-SOMAOP 2-DCOP
-simulation_type = ["Abstract"]  # "Abstract", "CTTD"
+simulation_type = ["CTTD"]  # "Abstract", "CTTD"
 algorithm_version = [0] # [0, 1, 2, 3, 4, 5] 0: regular version, 1: SA, 3: incremental  4: full schedule, 5: full schedule one shote 2 - dumping not in use
-bid_type = [3]  # [1, 2, 3] 1 - coverage bid/ truncated, 2 - shapley, 3- simple
+bid_type = [1,3]  # [1, 2, 3] 1 - coverage bid/ truncated, 2 - shapley, 3- simple
 termination = 250  # termination for RPA
 
 # for DCOP privacy coherency

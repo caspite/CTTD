@@ -4,8 +4,8 @@ from SynchronizedAlgorithms.SynchronizedSolver import VariableAssignment
 import enum
 
 dbug = False
-bid_debug = True
-offers_debug = True
+bid_debug = False
+offers_debug = False
 class ProviderStatus(enum.Enum):
     at_requester = 1
     in_transport = 2
@@ -87,6 +87,7 @@ class DsrmSP(SP):
                     offer.arrival_time = round(travel_time + self.last_update_time, 2)
                     offer.amount = self.skill_set[skill]
                     offer.location = self.neighbor_locations[requester]
+                    offer.travel_time = round(travel_time)
                     offer.last_workload_use = offer.arrival_time
                     msg_value = ServiceProposalMsg(sender_id=self._id, receiver_id=requester,
                                             context=offer)
@@ -229,7 +230,7 @@ class DsrmSR(SR):
 
         # ---- simulation variables
         self.sim_temp_temp_skills_needed = copy.deepcopy(self.skills_needed)
-        self.sim_temp_max_required = copy.deepcopy(self.simulation_entity.max_required)
+        self.sim_temp_max_required = copy.deepcopy(self.simulation_entity.get_max_required())
 
         self.current_services = []  # [variable assignments]
         self.working_by_skill = {}
@@ -276,7 +277,7 @@ class DsrmSR(SR):
         for skill in self.neighbors_by_skill:
             self.GS_has_not_offered[skill] = [sp for sp in self.neighbors_by_skill[skill]
                                               if (sp in self.util_j[skill]
-                                                  and self.util_j[skill][sp] >= self.simulation_entity.utility_threshold_for_acceptance)]
+                                                  and self.util_j[skill][sp] > self.simulation_entity.utility_threshold_for_acceptance)]
 
     # initiates util_j dict
     def reset_util_j(self):
@@ -294,9 +295,19 @@ class DsrmSR(SR):
     def update_cap(self):
         for skill in self.sim_temp_temp_skills_needed:
             workload = 0
+            max_require = copy.copy(self.sim_temp_max_required[skill])
+            can_provide_service = 0
+            # if skill in self.GS_accepted_providers.keys():
+            #     for offer in self.offers_received_by_skill[skill]:
+            #         if offer.provider in self.GS_accepted_providers[skill]:
+            #             max_require -= offer.amount
+            #         else:
+            #             can_provide_service += offer.amount
             if skill in self.neighbors_by_skill and \
                 len(self.neighbors_by_skill[skill]) < self.sim_temp_max_required[skill]:
                 workload = len(self.neighbors_by_skill[skill])
+                self.sim_temp_max_required[skill] = workload
+
             else:
                 workload = self.sim_temp_max_required[skill]
             self.temp_simulation_entity.update_cap(skill, workload)
@@ -307,9 +318,10 @@ class DsrmSR(SR):
 
     def initialize(self):
         self.update_neighbors_by_skill()
+        self.update_relevant_offers()
         self.update_cap()  # update cap to be the minimum between number of neighbors & max cap
         self.reset_GS_has_offered()
-        # self.update_relevant_offers()  #  todo update the relevant offers according to approval SPs and not offered. fix this! not needed and fix the simple bid accurdingly
+
         self.GS_SP_choices = {}
         self.reset_util_j()
         self.update_terminated()
@@ -355,10 +367,10 @@ class DsrmSR(SR):
         for skill in self.neighbors_by_skill:
             self.GS_has_not_offered[skill] = [sp for sp in self.neighbors_by_skill[skill]
                                               if (sp not in self.GS_has_offered[skill] and sp in self.util_j[skill]
-                                                  and self.util_j[skill][sp] >= self.simulation_entity.utility_threshold_for_acceptance)]
+                                                  and self.util_j[skill][sp] > self.simulation_entity.utility_threshold_for_acceptance)]
 
             if (len(self.GS_has_not_offered[skill]) == 0 or
-                    (len(self.GS_accepted_providers[skill]) == self.sim_temp_max_required[skill])):
+                    (len(self.GS_accepted_providers[skill]) >= self.sim_temp_max_required[skill])):
                 self.terminated[skill] = True
             else:
                 self.terminated[skill] = False
@@ -438,8 +450,7 @@ class DsrmSR(SR):
         if skill not in self.util_j:
             self.util_j[skill] = {}
         utilities_for_options = copy.deepcopy(self.util_j[skill])
-        to_remove = [sp for sp in utilities_for_options if sp not in self.GS_has_not_offered[skill] or
-                     utilities_for_options[sp] == 0]
+        to_remove = [sp for sp in utilities_for_options if sp not in self.GS_has_not_offered[skill]]
         for sp in to_remove:
             del utilities_for_options[sp]
 
@@ -447,8 +458,9 @@ class DsrmSR(SR):
 
         # self.print_options(utilities_for_options, skill)
 
+
         while number_to_allocate > 0 and len(utilities_for_options) > 0:
-            # NCLO
+        #     # NCLO
             self.NCLO += Agent.number_of_comparisons(1, len(utilities_for_options))
 
             max_offer = max(utilities_for_options, key=utilities_for_options.get)
@@ -481,19 +493,21 @@ class DsrmSR(SR):
             for offer in self.offers_received_by_skill[skill]:
                 if skill in self.neighbors_by_skill:
                     self.util_j[offer.skill][offer.provider] = self.simulation_entity.calc_simple_bid(copy.deepcopy(offer))
-                    self.NCLO += super().number_of_comparisons(1, len(self.offers_received_by_skill[skill]))
-
                     if self.util_j[offer.skill][offer.provider] == 0:
                         del self.util_j[offer.skill][offer.provider]
                         self.neighbors_by_skill[offer.skill].remove(offer.provider)
-
+                # self.NCLO += super().number_of_comparisons(1, 1) # len(self.offers_received_by_skill[skill])
     def update_truncated_bids(self):
         """
         update self.util_j
         :return: none
         """
-        self.NCLO += self.temp_simulation_entity.calc_truncated_bids(copy.deepcopy(self.offers_received_by_skill), self.util_j, self.GS_accepted_providers)
+        self.NCLO += self.simulation_entity.calc_truncated_bids(copy.deepcopy(self.offers_received_by_skill), self.util_j, self.GS_accepted_providers, self.neighbors)
 
+        for skill, util_j in self.util_j.items():
+            if len(util_j) > self.sim_temp_max_required[skill]:
+                new_util_j = dict(sorted(util_j.items(), key=lambda item: item[1], reverse=True)[:self.sim_temp_max_required[skill]])
+                self.util_j[skill] = new_util_j
 
         # skill_needed = copy.deepcopy(self.skills_needed)
         # skill_needed ={key:value for key,value in skill_needed.items() if key in self.neighbors_by_skill.keys()}
@@ -519,13 +533,13 @@ class DsrmSR(SR):
             simulation_times_for_utility[skill] = {}
             arrival_times = [offer.arrival_time for offer in self.finished_offers[skill]]
             leaving_times = [offer.leaving_time for offer in self.finished_offers[skill]]
-            all_times = list(sorted(arrival_times + leaving_times,key=lambda time: time))
+            all_times = list(sorted(set(arrival_times + leaving_times),key=lambda time: time))
             amount_of_working = 0
             for time in all_times:
                 simulation_times_for_utility[skill][time] = amount_of_working
                 if time in arrival_times:
                     amount_of_working += 1
-                elif time in leaving_times:
+                if time in leaving_times:
                     amount_of_working -= 1
 
         return self.simulation_entity.final_utility(simulation_times=simulation_times_for_utility, allocated_offers=self.finished_offers)
@@ -827,17 +841,21 @@ class DsrmSR(SR):
                 self.neighbors_skill[neighbor].remove(skill)
 
     def update_relevant_offers(self):
+        offers_accepted = {}
         for skill in self.offers_received_by_skill:
+            offers_accepted[skill] = []
             for offer in self.offers_received_by_skill[skill]:
-                if skill in self.neighbors_by_skill:
-                    if skill not in self.GS_has_not_offered or skill not in self.GS_accepted_providers:
-                        continue
-                    else:
-                        if ((offer.provider in self.GS_has_not_offered[skill] or offer.provider in self.GS_accepted_providers[skill]))\
-                                or (not self.temp_simulation_entity.is_offer_relevant(offer)):
-                            self.offers_received_by_skill[skill].remove(offer)
-                            if offer.provider in self.neighbors_by_skill[skill]:
-                                self.neighbors_by_skill[skill].remove(offer.provider)
+                if skill in self.GS_accepted_providers:
+                    if offer.provider in self.GS_accepted_providers[skill]:
+                        offers_accepted[skill].append(offer)
+            for offer in self.offers_received_by_skill[skill]:
+                if not self.simulation_entity.is_offer_relevant_according_to_accepted_offers(offer, offers_accepted[skill]):
+                    self.offers_received_by_skill[skill].remove(offer)
+                    if skill in self.neighbors_by_skill:
+                        if offer.provider in self.neighbors_by_skill[skill]:
+                            self.neighbors_by_skill[skill].remove(offer.provider)
+
+
     def is_in_new_service(self, service, new_services):
         for ns in new_services:
             if ns.provider == service.provider and ns.skill == service.skill:

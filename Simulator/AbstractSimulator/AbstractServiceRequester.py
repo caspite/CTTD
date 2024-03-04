@@ -128,6 +128,8 @@ class Requester(ServiceRequester):
             offers[:] = [offer for offer in offers if not offer.accept]
         return offers_received_by_skill, skills_needed_temp
 
+    def is_offer_relevant_according_to_accepted_offers(self,offer, offers_accepted):
+        return True
     def calc_converge_bid_to_offer(self, skill, offer):
         rate_of_util_fall = ((- self.max_util[skill] / self.rate_util_fall) / self.max_time)
         util_available = self.max_util[skill] + rate_of_util_fall * offer.arrival_time
@@ -141,13 +143,14 @@ class Requester(ServiceRequester):
             skill_amount_needed = self.skills_requirements[skill]
             if amount_neighbor_skill > skill_amount_needed:
                 amount_neighbor_skill = copy.deepcopy(skill_amount_needed)
+
             rate_of_util_fall = ((- self.max_util[skill] / self.rate_util_fall) / self.max_time)
-            util_available = self.max_util[skill] + rate_of_util_fall * offer.arrival_time # todo!!! check
-            best_util_received = util_available * (amount_neighbor_skill / skill_amount_needed)
+            util_available = self.max_util[skill]- rate_of_util_fall * offer.travel_time
+            best_util_received = util_available * offer.amount/ skill_amount_needed
             return round(best_util_received, 2)
         return 0
 
-    def calc_truncated_bids(self, offers,util_j, accepted_providers):
+    def calc_truncated_bids(self, offers,util_j, accepted_providers, neighrors):
         NCLO = 0
         #sort offers by time arrival
         # loop on all offers skills
@@ -173,7 +176,7 @@ class Requester(ServiceRequester):
                 util = self.get_util(neighbors_considered + list(accepted_providers[skill]), skill, offers_by_arrival)
                 self.update_specific_utilities(neighbors_considered, skill, util, accepted_providers[skill], util_j)
                 # NCLO
-                NCLO += super().number_of_comparisons(1, len(offers[skill]))
+                NCLO += super().number_of_comparisons(len(neighbors_considered), len(neighrors))
                 # will stop if we have all cap and also completed skill or we ran out of neighbors
                 all_considerd = list(set(neighbors_considered).union(accepted_providers[skill]))
                 if len(all_considerd) >= max_required:
@@ -187,17 +190,21 @@ class Requester(ServiceRequester):
         for provider_id in neighbors_working_together:
             offer = next(filter(lambda offer: offer.provider == provider_id, offers), None)
             total_skill += offer.amount
-            total_travel_times += offer.arrival_time
+            total_travel_times += offer.travel_time
 
         if total_skill > self.skills_requirements[skill]:
             total_skill = copy.deepcopy(self.skills_requirements[skill])
 
-        # skill cover factor
-        if total_skill / self.skills_requirements[skill] < 1:
-            util *= total_skill / self.skills_requirements[skill]
+
 
         # penalty for delay * distance = utility lost for arrival
         util -= self.penalty_for_delay * total_travel_times
+        # rate_of_util_fall = ((- self.max_util[skill] / self.rate_util_fall) / self.max_time)
+        # util += rate_of_util_fall * total_travel_times
+
+        # skill cover factor
+        if total_skill / self.skills_requirements[skill] < 1:
+            util *= total_skill / self.skills_requirements[skill]
 
         # cap function
         util *= cap(len(neighbors_working_together), self.max_required[skill])
@@ -217,7 +224,6 @@ class Requester(ServiceRequester):
                 util -= util_j[skill][neighbor]
                 number_sharing -= 1
 
-
     def final_utility(self, allocated_offers=None, SP_view=None, cost=None, simulation_times=None):
         if simulation_times is None:
             simulation_times = self.create_simulation_times(allocated_offers, SP_view)
@@ -235,7 +241,7 @@ class Requester(ServiceRequester):
                 for time, amount_working in simulation_times[skill].items():
                     time_elapsed = time - last_time
                     skills_complete = round(min(amount_needed - total_amount_complete,
-                                          time_elapsed / self.time_per_skill_unit[skill]),2)
+                                                (time_elapsed / self.time_per_skill_unit[skill]) * amount_working),2)
 
                     if amount_working == 0:  # no service given in this time frame - util is lost
                         util_available += rate_of_util_fall * time_elapsed
@@ -322,6 +328,9 @@ class Requester(ServiceRequester):
             return False
     def get_care_time(self, skill,time):
         return self.time_per_skill_unit[skill]
+
+    def get_max_required(self):
+        return self.max_required
 def update_unallocated(offers):
     for offer in offers:
         offer.utility = 0
